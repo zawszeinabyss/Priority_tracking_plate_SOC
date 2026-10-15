@@ -1,555 +1,126 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="vi">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport"
-        content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#080d1d">
-  <title>Truck Check · Quét BKS</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#020617" />
+  <title>Truck ID Check</title>
 
-  <style>
-    * { box-sizing: border-box; }
-    [hidden] { display: none !important; }
-
-    body {
-      margin: 0;
-      background: #080d1d;
-      color: #f1f5ff;
-      font-family: system-ui, -apple-system, sans-serif;
-    }
-
-    main {
-      max-width: 560px;
-      margin: auto;
-      padding: 24px 16px;
-    }
-
-    .brand {
-      color: #80cfff;
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 2px;
-    }
-
-    h1 { margin: 10px 0 20px; font-size: 30px; }
-
-    .viewer {
-      position: relative;
-      overflow: hidden;
-      border-radius: 20px;
-      background: #000;
-    }
-
-    video {
-      display: block;
-      width: 100%;
-      height: auto;
-    }
-
-    #guide {
-      position: absolute;
-      left: 8%;
-      top: 30%;
-      width: 84%;
-      height: 40%;
-      border: 2px solid #80cfff;
-      border-radius: 12px;
-      box-shadow: 0 0 0 1000px #0005;
-      pointer-events: none;
-    }
-
-    #guide span {
-      position: absolute;
-      bottom: -28px;
-      width: 100%;
-      text-align: center;
-      font-size: 11px;
-      letter-spacing: 1px;
-      color: white;
-    }
-
-    #retry {
-      display: block;
-      width: 100%;
-      margin-top: 14px;
-      padding: 15px;
-      background: #3489c7;
-      border: 0;
-      border-radius: 12px;
-      color: white;
-      font: inherit;
-      font-weight: 700;
-    }
-
-    #retry:disabled { opacity: .5; }
-
-    .result {
-      padding: 22px;
-      margin-top: 18px;
-      border: 1px solid #344661;
-      border-radius: 18px;
-      background: #111b30;
-      text-align: center;
-    }
-
-    #plate {
-      margin: 0;
-      font-size: clamp(24px, 7vw, 36px);
-      letter-spacing: 2px;
-      overflow-wrap: anywhere;
-    }
-
-    #status {
-      color: #b8c8df;
-      font-size: 14px;
-      line-height: 1.6;
-      margin-bottom: 0;
-      overflow-wrap: anywhere;
-    }
-
-    footer {
-      margin-top: 18px;
-      color: #8195b3;
-      font-size: 12px;
-      line-height: 1.7;
-      text-align: center;
-    }
-  </style>
+  <link rel="stylesheet" href="./styles.css?v=31" />
 
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.wasm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
+
+  <script src="./config.js"></script>
+  <script defer src="./app.js?v=34"></script>
 </head>
 
 <body>
-<main>
-  <div class="brand">BD MEGA · TRUCK CHECK</div>
-  <h1>Quét BKS</h1>
-
-  <div class="viewer">
-    <video id="video" autoplay muted playsinline></video>
-    <div id="guide"><span>ĐƯA BKS VÀO KHUNG</span></div>
-  </div>
-
-  <button id="retry" type="button" hidden>
-    Chạm để tiếp tục
-  </button>
-
-  <section class="result" aria-live="polite" aria-atomic="true">
-    <h2 id="plate">Đang chuẩn bị…</h2>
-    <p id="status">Đang khởi động camera và OCR.</p>
-  </section>
-
-  <footer>
-    Tự động đọc biển số · Bản kiểm tra OCR<br>
-    Chưa kết nối danh sách UT · Chưa lưu lượt quét
-  </footer>
-
-  <canvas id="crop" width="128" height="64" hidden></canvas>
-</main>
-
-<script>
-(() => {
-  'use strict';
-
-  const $ = id => document.getElementById(id);
-  const video = $('video');
-  const retry = $('retry');
-  const canvas = $('crop');
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
-  const MODEL_URL = new URL('./cct_xs_v2_global.onnx', location.href).href;
-  const ORT_BASE =
-    'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/';
-
-  const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_';
-
-  const SCAN_INTERVAL_MS = 300;
-  const REQUIRED_HITS = 3;
-
-  // Ngưỡng khởi điểm để thử nghiệm, chưa phải độ chính xác đã kiểm chứng.
-  const MIN_MEAN_SCORE = 0.85;
-  const MIN_CHAR_SCORE = 0.60;
-  const RESULT_HOLD_MS = 1800;
-
-  let session = null;
-  let modelPromise = null;
-  let stream = null;
-
-  let generation = 0;
-  let starting = false;
-  let running = false;
-  let inferenceBusy = false;
-  let timer = null;
-
-  let candidate = '';
-  let hits = 0;
-  let shownPlate = '';
-  let lastConfirmedAt = 0;
-  let lastFrameTime = -1;
-
-  function render(plate, message) {
-    if ($('plate').textContent !== plate) {
-      $('plate').textContent = plate;
-    }
-    if ($('status').textContent !== message) {
-      $('status').textContent = message;
-    }
-  }
-
-  function clearRecognition() {
-    candidate = '';
-    hits = 0;
-    shownPlate = '';
-    lastConfirmedAt = 0;
-    lastFrameTime = -1;
-  }
-
-  function stop() {
-    generation++;
-    clearTimeout(timer);
-    timer = null;
-    running = false;
-    starting = false;
-
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      stream = null;
-    }
-
-    video.pause();
-    video.srcObject = null;
-    clearRecognition();
-  }
-
-  function fail(error) {
-    stop();
-
-    const messages = {
-      NotAllowedError:
-        'Chưa được cấp quyền camera. Cho phép camera rồi chạm để thử lại.',
-      NotFoundError:
-        'Không tìm thấy camera trên thiết bị.',
-      NotReadableError:
-        'Không mở được camera. Đóng ứng dụng khác đang dùng camera.',
-      AbortError:
-        'Tải model quá lâu hoặc đã bị ngắt. Kiểm tra mạng rồi thử lại.'
-    };
-
-    render(
-      'Chưa quét được',
-      messages[error.name] || error.message || 'Hãy thử lại.'
-    );
-
-    retry.hidden = false;
-    retry.disabled = false;
-  }
-
-  async function loadModel() {
-    if (session) return session;
-    if (modelPromise) return modelPromise;
-
-    modelPromise = (async () => {
-      if (!window.ort) {
-        throw new Error('Không tải được thư viện OCR. Hãy tải lại trang.');
-      }
-
-      ort.env.wasm.wasmPaths = ORT_BASE;
-      ort.env.wasm.numThreads = 1;
-      ort.env.wasm.proxy = false;
-
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 45000);
-      let bytes;
-
-      try {
-        const response = await fetch(MODEL_URL, {
-          signal: controller.signal
-        });
-
-        if (!response.ok) {
-          throw new Error('Không tải được model: HTTP ' + response.status);
-        }
-
-        bytes = await response.arrayBuffer();
-      } finally {
-        clearTimeout(timeout);
-      }
-
-      const created = await ort.InferenceSession.create(bytes, {
-        executionProviders: ['wasm'],
-        graphOptimizationLevel: 'all'
-      });
-
-      if (!created.outputNames.includes('plate')) {
-        await created.release();
-        throw new Error('Model không có đầu ra plate.');
-      }
-
-      session = created;
-      return session;
-    })();
-
-    try {
-      return await modelPromise;
-    } finally {
-      modelPromise = null;
-    }
-  }
-
-  async function start() {
-    if (starting || running || document.hidden) return;
-
-    const token = ++generation;
-    starting = true;
-    retry.hidden = true;
-    retry.disabled = true;
-
-    clearRecognition();
-    render('Đang chuẩn bị…', 'Đang tải OCR và mở camera.');
-
-    try {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error('Hãy mở trang HTTPS này trực tiếp bằng Safari hoặc Chrome.');
-      }
-
-      // Gắn catch ngay để không phát sinh promise rejection chưa xử lý.
-      const modelTask = loadModel().then(
-        value => ({ value }),
-        error => ({ error })
-      );
-
-      const acquired = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
-      });
-
-      if (token !== generation || document.hidden) {
-        acquired.getTracks().forEach(track => track.stop());
-        return;
-      }
-
-      stream = acquired;
-      video.srcObject = stream;
-
-      stream.getVideoTracks()[0].addEventListener('ended', () => {
-        if (token === generation) {
-          fail(new Error('Camera đã ngắt. Chạm để tiếp tục.'));
-        }
-      });
-
-      await video.play();
-
-      if (token !== generation) return;
-
-      render('Đang chuẩn bị…', 'Camera đã mở. Đang chuẩn bị OCR.');
-
-      const loaded = await modelTask;
-      if (token !== generation) return;
-      if (loaded.error) throw loaded.error;
-
-      starting = false;
-      running = true;
-
-      render('Đang tìm biển số…', 'Giữ BKS rõ và nằm gọn trong khung.');
-      schedule(token, 0);
-    } catch (error) {
-      if (token === generation) fail(error);
-    }
-  }
-
-  function schedule(token, delay) {
-    if (!running || token !== generation || document.hidden) return;
-    clearTimeout(timer);
-    timer = setTimeout(() => scan(token), delay);
-  }
-
-  function makeTensor() {
-    const v = video.getBoundingClientRect();
-    const g = $('guide').getBoundingClientRect();
-
-    const sx = (g.left - v.left) / v.width * video.videoWidth;
-    const sy = (g.top - v.top) / v.height * video.videoHeight;
-    const sw = g.width / v.width * video.videoWidth;
-    const sh = g.height / v.height * video.videoHeight;
-
-    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, 128, 64);
-
-    const rgba = ctx.getImageData(0, 0, 128, 64).data;
-    const rgb = new Uint8Array(128 * 64 * 3);
-
-    for (let src = 0, dst = 0; src < rgba.length; src += 4) {
-      rgb[dst++] = rgba[src];
-      rgb[dst++] = rgba[src + 1];
-      rgb[dst++] = rgba[src + 2];
-    }
-
-    return new ort.Tensor('uint8', rgb, [1, 64, 128, 3]);
-  }
-
-  function decode(output) {
-    if (
-      !output ||
-      output.dims.length !== 3 ||
-      output.dims[0] !== 1 ||
-      output.dims[1] !== 10 ||
-      output.dims[2] !== 37
-    ) {
-      throw new Error('Đầu ra model không đúng cấu hình.');
-    }
-
-    let plate = '';
-    let total = 0;
-    let minimum = 1;
-    let count = 0;
-
-    for (let slot = 0; slot < 10; slot++) {
-      const offset = slot * 37;
-      let best = 0;
-
-      for (let j = 1; j < 37; j++) {
-        if (output.data[offset + j] > output.data[offset + best]) {
-          best = j;
-        }
-      }
-
-      const character = ALPHABET[best];
-
-      if (character !== '_') {
-        const score = output.data[offset + best];
-        plate += character;
-        total += score;
-        minimum = Math.min(minimum, score);
-        count++;
-      }
-    }
-
-    return {
-      plate,
-      mean: count ? total / count : 0,
-      minimum: count ? minimum : 0
-    };
-  }
-
-  function accept(result) {
-    const now = performance.now();
-
-    // Bộ lọc rộng cho BKS chữ/số; không xác nhận tính hợp lệ pháp lý.
-    const plausible =
-      /^[A-Z0-9]{7,10}$/.test(result.plate) &&
-      /[A-Z]/.test(result.plate) &&
-      /[0-9]/.test(result.plate);
-
-    const confident =
-      Number.isFinite(result.mean) &&
-      Number.isFinite(result.minimum) &&
-      result.mean >= MIN_MEAN_SCORE &&
-      result.minimum >= MIN_CHAR_SCORE;
-
-    if (plausible && confident) {
-      if (candidate === result.plate) {
-        hits++;
-      } else {
-        candidate = result.plate;
-        hits = 1;
-      }
-
-      if (hits >= REQUIRED_HITS) {
-        lastConfirmedAt = now;
-        shownPlate = result.plate;
-
-        render(shownPlate, 'BKS nhận diện được · Chưa tra cứu UT.');
-        return;
-      }
-    } else {
-      candidate = '';
-      hits = 0;
-    }
-
-    // Không giữ BKS xe cũ vô thời hạn khi camera đã chuyển sang xe khác.
-    if (!shownPlate || now - lastConfirmedAt > RESULT_HOLD_MS) {
-      shownPlate = '';
-      render('Đang tìm biển số…', 'Giữ BKS rõ và nằm gọn trong khung.');
-    }
-  }
-
-  async function scan(token) {
-    if (!running || token !== generation || document.hidden) return;
-
-    // Ngăn chạy chồng cả khi người dùng vừa rời rồi quay lại trang.
-    if (inferenceBusy) {
-      schedule(token, 50);
-      return;
-    }
-
-    if (
-      video.readyState < 2 ||
-      !video.videoWidth ||
-      !video.videoHeight
-    ) {
-      schedule(token, 100);
-      return;
-    }
-
-    // Không tính cùng một khung hình thành nhiều lần xác nhận.
-    if (video.currentTime === lastFrameTime) {
-      schedule(token, 100);
-      return;
-    }
-
-    lastFrameTime = video.currentTime;
-    inferenceBusy = true;
-
-    const began = performance.now();
-    let input;
-    let outputs;
-
-    try {
-      input = makeTensor();
-
-      outputs = await session.run({
-        [session.inputNames[0]]: input
-      });
-
-      if (token !== generation || !running) return;
-
-      accept(decode(outputs.plate));
-    } catch (error) {
-      if (token === generation) fail(error);
-    } finally {
-      if (input) input.dispose();
-
-      if (outputs) {
-        Object.values(outputs).forEach(output => output.dispose());
-      }
-
-      inferenceBusy = false;
-
-      const duration = performance.now() - began;
-      schedule(token, Math.max(0, SCAN_INTERVAL_MS - duration));
-    }
-  }
-
-  retry.addEventListener('click', start);
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      stop();
-      render('Đã tạm dừng', 'Quay lại trang để tiếp tục quét.');
-    } else {
-      start();
-    }
-  });
-
-  window.addEventListener('pagehide', stop);
-  window.addEventListener('pageshow', () => {
-    if (!document.hidden) start();
-  });
-
-  start();
-})();
-</script>
+  <main class="shell">
+    <header class="header">
+      <div>
+        <div class="eyebrow">BD MEGA · TRUCK CHECK</div>
+        <h1>Quét BKS</h1>
+      </div>
+
+      <div id="systemPill" class="pill pill-loading">
+        <span class="dot"></span>
+        <span id="systemText">Đang khởi động</span>
+      </div>
+    </header>
+
+    <section id="authGate" class="auth-gate hidden" aria-live="polite">
+      <div class="auth-icon">🔐</div>
+
+      <div class="auth-title">
+        Cấp quyền lần đầu
+      </div>
+
+      <div id="authMessage" class="auth-message">
+        Truck Check cần quyền Google Sheets để tải danh sách xe và lưu lượt quét.
+        Chỉ cần cấp một lần cho tài khoản này.
+      </div>
+
+      <button id="authBtn" class="auth-btn" type="button">
+        Cấp quyền sử dụng
+      </button>
+
+      <button id="authRetryBtn" class="auth-retry-btn" type="button">
+        Tôi đã cấp quyền · Kiểm tra lại
+      </button>
+
+      <div class="auth-hint">
+        Hãy chọn đúng email Shopee Mobile đang dùng để quét.
+        Sau khi bấm Allow, quay lại tab Truck Check — hệ thống sẽ tự kiểm tra.
+      </div>
+    </section>
+
+    <section class="scanner">
+      <video id="video" autoplay playsinline muted></video>
+
+      <div id="cameraFallback" class="camera-fallback hidden">
+        <div class="camera-icon">📷</div>
+        <div id="cameraFallbackText">Chạm để mở camera</div>
+      </div>
+
+      <div class="shade shade-top"></div>
+      <div class="shade shade-bottom"></div>
+
+      <div class="scan-frame">
+        <div class="corner tl"></div>
+        <div class="corner tr"></div>
+        <div class="corner bl"></div>
+        <div class="corner br"></div>
+        <div class="scan-line"></div>
+        <span>ĐƯA BKS VÀO KHUNG</span>
+      </div>
+    </section>
+
+    <section id="resultCard" class="result result-idle">
+      <div id="resultMain" class="result-main">Đang chuẩn bị...</div>
+      <div id="resultSub" class="result-sub">
+        Camera và dữ liệu sẽ tự khởi động.
+      </div>
+    </section>
+
+    <section class="manual-card">
+      <div class="manual-title">Nhập BKS thủ công</div>
+
+      <form id="manualForm" class="manual-form" autocomplete="off">
+        <input
+          id="manualInput"
+          class="manual-input"
+          type="text"
+          inputmode="text"
+          autocapitalize="characters"
+          autocomplete="off"
+          spellcheck="false"
+          enterkeyhint="go"
+          placeholder="VD: 50E-360.75"
+          maxlength="16"
+          aria-label="Nhập BKS thủ công"
+        />
+
+        <button id="manualBtn" class="manual-btn" type="submit">
+          Kiểm tra
+        </button>
+      </form>
+
+      <div class="manual-hint">
+        Chỉ dùng khi OCR không đọc được hoặc cần sửa nhanh BKS.
+      </div>
+    </section>
+
+    <section class="tiny-status">
+      <span id="sourceStatus">Source: —</span>
+      <span>·</span>
+      <span id="logStatus">Log: —</span>
+      <span>·</span>
+      <span id="ocrStatus">OCR: —</span>
+    </section>
+
+    <canvas id="modelCanvas" width="128" height="64" hidden></canvas>
+    <canvas id="bodyCanvas" width="960" height="480" hidden></canvas>
+  </main>
 </body>
 </html>
