@@ -1,126 +1,972 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#020617" />
-  <title>Truck ID Check</title>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1,viewport-fit=cover"
+  >
+  <meta name="theme-color" content="#080d1d">
+  <title>Truck Check · Quét BKS</title>
 
-  <link rel="stylesheet" href="./styles.css?v=31" />
+  <style>
+    * { box-sizing: border-box; }
+
+    [hidden] { display: none !important; }
+
+    body {
+      margin: 0;
+      background: #080d1d;
+      color: #f1f5ff;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    main {
+      width: 100%;
+      max-width: 560px;
+      margin: auto;
+      padding: 22px 16px;
+    }
+
+    .brand {
+      color: #80cfff;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 2px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 8px 0 0;
+      font-size: 30px;
+    }
+
+    #system {
+      flex-shrink: 0;
+      padding: 8px 10px;
+      background: #142139;
+      border-radius: 20px;
+      color: #a9d9ff;
+      font-size: 12px;
+    }
+
+    .viewer {
+      position: relative;
+      overflow: hidden;
+      border-radius: 20px;
+      background: #000;
+      min-height: 180px;
+    }
+
+    /*
+      Video hiển thị nguyên ảnh.
+      Không dùng object-fit: cover để tránh lệch vùng cắt.
+    */
+    video {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    /*
+      Vị trí/kích thước khung được tính từ ảnh camera.
+      Viền dùng outline để không làm sai kích thước vùng cắt.
+    */
+    #guide {
+      position: absolute;
+      outline: 2px solid #80cfff;
+      border-radius: 10px;
+      box-shadow: 0 0 0 1000px #0006;
+      pointer-events: none;
+    }
+
+    #guide span {
+      position: absolute;
+      bottom: -28px;
+      width: 100%;
+      color: white;
+      text-align: center;
+      font-size: 10px;
+      letter-spacing: 1px;
+    }
+
+    #retry {
+      display: block;
+      width: 100%;
+      margin-top: 14px;
+      padding: 15px;
+      border: 0;
+      border-radius: 12px;
+      background: #3489c7;
+      color: white;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    #retry:disabled {
+      opacity: .5;
+      cursor: wait;
+    }
+
+    .result {
+      margin-top: 18px;
+      padding: 22px 16px;
+      border: 1px solid #344661;
+      border-radius: 18px;
+      background: #111b30;
+      text-align: center;
+    }
+
+    .result.detected {
+      border-color: #65c879;
+      background: #112b22;
+    }
+
+    #plate {
+      margin: 0;
+      font-size: clamp(23px, 7vw, 36px);
+      letter-spacing: 1px;
+      overflow-wrap: anywhere;
+    }
+
+    #status {
+      margin: 12px 0 0;
+      color: #b8c8df;
+      font-size: 14px;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+
+    details {
+      margin-top: 18px;
+      padding: 14px;
+      border: 1px solid #27374f;
+      border-radius: 12px;
+      color: #a5b6ce;
+      font-size: 12px;
+    }
+
+    summary { cursor: pointer; }
+
+    #debugText {
+      line-height: 1.8;
+      white-space: pre-line;
+      overflow-wrap: anywhere;
+    }
+
+    #preview {
+      display: block;
+      width: 256px;
+      max-width: 100%;
+      height: auto;
+      margin-top: 10px;
+      background: #000;
+      border: 1px solid #344661;
+    }
+
+    footer {
+      margin-top: 18px;
+      color: #8195b3;
+      font-size: 12px;
+      line-height: 1.7;
+      text-align: center;
+    }
+  </style>
 
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.wasm.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
-
-  <script src="./config.js"></script>
-  <script defer src="./app.js?v=34"></script>
 </head>
 
 <body>
-  <main class="shell">
-    <header class="header">
-      <div>
-        <div class="eyebrow">BD MEGA · TRUCK CHECK</div>
-        <h1>Quét BKS</h1>
-      </div>
+<main>
+  <header>
+    <div>
+      <div class="brand">BD MEGA · TRUCK CHECK</div>
+      <h1>Quét BKS</h1>
+    </div>
 
-      <div id="systemPill" class="pill pill-loading">
-        <span class="dot"></span>
-        <span id="systemText">Đang khởi động</span>
-      </div>
-    </header>
+    <div id="system" role="status">Khởi động</div>
+  </header>
 
-    <section id="authGate" class="auth-gate hidden" aria-live="polite">
-      <div class="auth-icon">🔐</div>
+  <section class="viewer">
+    <video id="video" autoplay muted playsinline></video>
 
-      <div class="auth-title">
-        Cấp quyền lần đầu
-      </div>
+    <div id="guide" hidden>
+      <span>ĐƯA BKS VÀO GIỮA KHUNG</span>
+    </div>
+  </section>
 
-      <div id="authMessage" class="auth-message">
-        Truck Check cần quyền Google Sheets để tải danh sách xe và lưu lượt quét.
-        Chỉ cần cấp một lần cho tài khoản này.
-      </div>
+  <button id="retry" type="button" hidden>
+    Chạm để tiếp tục
+  </button>
 
-      <button id="authBtn" class="auth-btn" type="button">
-        Cấp quyền sử dụng
-      </button>
+  <section
+    id="result"
+    class="result"
+    aria-live="polite"
+    aria-atomic="true"
+  >
+    <h2 id="plate">Đang chuẩn bị…</h2>
+    <p id="status">Đang khởi động camera và OCR.</p>
+  </section>
 
-      <button id="authRetryBtn" class="auth-retry-btn" type="button">
-        Tôi đã cấp quyền · Kiểm tra lại
-      </button>
+  <details id="diagnostics">
+    <summary>Chẩn đoán OCR</summary>
+    <p id="debugText">Chưa có lượt đọc.</p>
+    <div>Ảnh thực tế đưa vào model:</div>
+    <canvas id="preview" width="128" height="64"></canvas>
+  </details>
 
-      <div class="auth-hint">
-        Hãy chọn đúng email Shopee Mobile đang dùng để quét.
-        Sau khi bấm Allow, quay lại tab Truck Check — hệ thống sẽ tự kiểm tra.
-      </div>
-    </section>
+  <footer>
+    Bản OCR DEV 03 · Tự động quét<br>
+    Chưa kết nối UT · Chưa lưu lượt quét
+  </footer>
 
-    <section class="scanner">
-      <video id="video" autoplay playsinline muted></video>
+  <canvas id="modelCanvas" width="128" height="64" hidden></canvas>
+</main>
 
-      <div id="cameraFallback" class="camera-fallback hidden">
-        <div class="camera-icon">📷</div>
-        <div id="cameraFallbackText">Chạm để mở camera</div>
-      </div>
+<script>
+(() => {
+  'use strict';
 
-      <div class="shade shade-top"></div>
-      <div class="shade shade-bottom"></div>
+  // ==========================================================
+  // CẤU HÌNH
+  // Đã gộp trong index.html, không cần config.js riêng.
+  // ==========================================================
 
-      <div class="scan-frame">
-        <div class="corner tl"></div>
-        <div class="corner tr"></div>
-        <div class="corner bl"></div>
-        <div class="corner br"></div>
-        <div class="scan-line"></div>
-        <span>ĐƯA BKS VÀO KHUNG</span>
-      </div>
-    </section>
+  const CONFIG = Object.freeze({
+    modelUrl: new URL(
+      './cct_xs_v2_global.onnx',
+      location.href
+    ).href,
 
-    <section id="resultCard" class="result result-idle">
-      <div id="resultMain" class="result-main">Đang chuẩn bị...</div>
-      <div id="resultSub" class="result-sub">
-        Camera và dữ liệu sẽ tự khởi động.
-      </div>
-    </section>
+    runtimePath:
+      'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/',
 
-    <section class="manual-card">
-      <div class="manual-title">Nhập BKS thủ công</div>
+    alphabet: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_',
 
-      <form id="manualForm" class="manual-form" autocomplete="off">
-        <input
-          id="manualInput"
-          class="manual-input"
-          type="text"
-          inputmode="text"
-          autocapitalize="characters"
-          autocomplete="off"
-          spellcheck="false"
-          enterkeyhint="go"
-          placeholder="VD: 50E-360.75"
-          maxlength="16"
-          aria-label="Nhập BKS thủ công"
-        />
+    inputWidth: 128,
+    inputHeight: 64,
+    plateSlots: 10,
 
-        <button id="manualBtn" class="manual-btn" type="submit">
-          Kiểm tra
-        </button>
-      </form>
+    scanIntervalMs: 300,
+    stableRequired: 2,
 
-      <div class="manual-hint">
-        Chỉ dùng khi OCR không đọc được hoặc cần sửa nhanh BKS.
-      </div>
-    </section>
+    // Ngưỡng thử nghiệm, không phải tỷ lệ chính xác đã kiểm chứng.
+    minMeanScore: 0.70,
+    minCharScore: 0.40,
 
-    <section class="tiny-status">
-      <span id="sourceStatus">Source: —</span>
-      <span>·</span>
-      <span id="logStatus">Log: —</span>
-      <span>·</span>
-      <span id="ocrStatus">OCR: —</span>
-    </section>
+    resultHoldMs: 1800,
+    maxCandidateGapMs: 2000,
 
-    <canvas id="modelCanvas" width="128" height="64" hidden></canvas>
-    <canvas id="bodyCanvas" width="960" height="480" hidden></canvas>
-  </main>
+    roiWidthRatio: 0.86,
+    roiMaxHeightRatio: 0.48,
+
+    modelDownloadTimeoutMs: 45000
+  });
+
+  const $ = id => document.getElementById(id);
+
+  const video = $('video');
+  const guide = $('guide');
+  const retryButton = $('retry');
+
+  const modelCanvas = $('modelCanvas');
+  const modelContext = modelCanvas.getContext(
+    '2d',
+    { willReadFrequently: true }
+  );
+
+  const previewContext = $('preview').getContext('2d');
+
+  const state = {
+    session: null,
+    modelPromise: null,
+    stream: null,
+
+    starting: false,
+    running: false,
+    inferenceBusy: false,
+
+    generation: 0,
+    timer: null,
+
+    candidate: '',
+    hits: 0,
+    lastCandidateAt: 0,
+
+    shownPlate: '',
+    lastConfirmedAt: 0,
+    lastFrameTime: -1,
+
+    scanCount: 0
+  };
+
+  // ==========================================================
+  // GIAO DIỆN
+  // ==========================================================
+
+  function setSystem(text) {
+    $('system').textContent = text;
+  }
+
+  function showResult(plate, message, detected = false) {
+    if ($('plate').textContent !== plate) {
+      $('plate').textContent = plate;
+    }
+
+    if ($('status').textContent !== message) {
+      $('status').textContent = message;
+    }
+
+    $('result').classList.toggle('detected', detected);
+  }
+
+  function resetRecognition() {
+    state.candidate = '';
+    state.hits = 0;
+    state.lastCandidateAt = 0;
+
+    state.shownPlate = '';
+    state.lastConfirmedAt = 0;
+    state.lastFrameTime = -1;
+  }
+
+  function clearCandidate() {
+    state.candidate = '';
+    state.hits = 0;
+    state.lastCandidateAt = 0;
+  }
+
+  // ==========================================================
+  // CAMERA / VÒNG ĐỜI
+  // ==========================================================
+
+  function stopScanner() {
+    state.generation++;
+
+    clearTimeout(state.timer);
+    state.timer = null;
+
+    state.running = false;
+    state.starting = false;
+
+    if (state.stream) {
+      state.stream.getTracks().forEach(track => track.stop());
+      state.stream = null;
+    }
+
+    video.pause();
+    video.srcObject = null;
+    guide.hidden = true;
+
+    resetRecognition();
+
+    // Không reset inferenceBusy ở đây:
+    // lượt ONNX đang chạy phải hoàn tất và tự giải phóng.
+  }
+
+  function showError(error) {
+    stopScanner();
+
+    const messages = {
+      NotAllowedError:
+        'Chưa được cấp quyền camera. Cho phép camera rồi thử lại.',
+
+      NotFoundError:
+        'Không tìm thấy camera trên thiết bị.',
+
+      NotReadableError:
+        'Không đọc được camera. Đóng ứng dụng khác đang dùng camera.',
+
+      AbortError:
+        'Tải model bị ngắt hoặc quá thời gian. Kiểm tra mạng rồi thử lại.'
+    };
+
+    setSystem('Cần kiểm tra');
+
+    showResult(
+      'Chưa quét được',
+      messages[error.name] ||
+        error.message ||
+        'Hãy thử lại.'
+    );
+
+    retryButton.hidden = false;
+    retryButton.disabled = false;
+  }
+
+  async function startScanner() {
+    if (
+      state.starting ||
+      state.running ||
+      document.hidden
+    ) {
+      return;
+    }
+
+    const token = ++state.generation;
+
+    state.starting = true;
+    resetRecognition();
+
+    retryButton.hidden = true;
+    retryButton.disabled = true;
+
+    setSystem('Khởi động');
+    showResult('Đang chuẩn bị…', 'Đang mở camera và tải OCR.');
+
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error(
+          'Hãy mở trang HTTPS này trực tiếp bằng Safari hoặc Chrome.'
+        );
+      }
+
+      // Gắn xử lý lỗi ngay, kể cả khi quyền camera chưa được cấp.
+      const modelTask = loadModel().then(
+        value => ({ value }),
+        error => ({ error })
+      );
+
+      const acquired = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
+      });
+
+      if (
+        token !== state.generation ||
+        document.hidden
+      ) {
+        acquired.getTracks().forEach(track => track.stop());
+        return;
+      }
+
+      state.stream = acquired;
+      video.srcObject = acquired;
+
+      acquired.getVideoTracks()[0].addEventListener('ended', () => {
+        if (token === state.generation) {
+          showError(new Error('Camera đã ngắt. Chạm để tiếp tục.'));
+        }
+      });
+
+      await video.play();
+
+      if (token !== state.generation) return;
+
+      updateGuide();
+
+      showResult(
+        'Đang chuẩn bị…',
+        'Camera đã mở. Đang chuẩn bị model OCR.'
+      );
+
+      const loaded = await modelTask;
+
+      if (token !== state.generation) return;
+      if (loaded.error) throw loaded.error;
+
+      state.starting = false;
+      state.running = true;
+
+      setSystem('Đang quét');
+
+      showResult(
+        'Đang tìm biển số…',
+        'Đưa BKS vào giữa khung, chữ đủ lớn và rõ.'
+      );
+
+      schedule(token, 0);
+    } catch (error) {
+      if (token === state.generation) {
+        showError(error);
+      }
+    }
+  }
+
+  // ==========================================================
+  // LOAD MODEL
+  // ==========================================================
+
+  async function loadModel() {
+    if (state.session) return state.session;
+    if (state.modelPromise) return state.modelPromise;
+
+    state.modelPromise = (async () => {
+      if (!window.ort) {
+        throw new Error(
+          'Không tải được ONNX Runtime. Hãy tải lại trang.'
+        );
+      }
+
+      ort.env.wasm.wasmPaths = CONFIG.runtimePath;
+      ort.env.wasm.numThreads = 1;
+      ort.env.wasm.proxy = false;
+
+      const controller = new AbortController();
+
+      const timeout = setTimeout(
+        () => controller.abort(),
+        CONFIG.modelDownloadTimeoutMs
+      );
+
+      let bytes;
+
+      try {
+        const response = await fetch(CONFIG.modelUrl, {
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            'Không tải được model: HTTP ' + response.status
+          );
+        }
+
+        bytes = await response.arrayBuffer();
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      const created = await ort.InferenceSession.create(bytes, {
+        executionProviders: ['wasm'],
+        graphOptimizationLevel: 'all'
+      });
+
+      if (!created.outputNames.includes('plate')) {
+        await created.release();
+        throw new Error('Model không có đầu ra plate.');
+      }
+
+      state.session = created;
+      return created;
+    })();
+
+    try {
+      return await state.modelPromise;
+    } finally {
+      state.modelPromise = null;
+    }
+  }
+
+  // ==========================================================
+  // VÙNG QUÉT 2:1
+  // Khung hiển thị và ảnh đưa vào model dùng cùng một ROI.
+  // ==========================================================
+
+  function getRoi() {
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+
+    if (!vw || !vh) {
+      throw new Error('Camera chưa có khung hình.');
+    }
+
+    let width = vw * CONFIG.roiWidthRatio;
+    let height = width / 2;
+
+    const maxHeight = vh * CONFIG.roiMaxHeightRatio;
+
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = height * 2;
+    }
+
+    return {
+      x: (vw - width) / 2,
+      y: (vh - height) / 2,
+      width,
+      height
+    };
+  }
+
+  function updateGuide() {
+    if (!video.videoWidth || !video.videoHeight) {
+      guide.hidden = true;
+      return;
+    }
+
+    const roi = getRoi();
+
+    guide.style.left =
+      (roi.x / video.videoWidth * 100) + '%';
+
+    guide.style.top =
+      (roi.y / video.videoHeight * 100) + '%';
+
+    guide.style.width =
+      (roi.width / video.videoWidth * 100) + '%';
+
+    guide.style.height =
+      (roi.height / video.videoHeight * 100) + '%';
+
+    guide.hidden = false;
+  }
+
+  function makeTensor() {
+    const roi = getRoi();
+
+    modelContext.imageSmoothingEnabled = true;
+
+    modelContext.drawImage(
+      video,
+      roi.x,
+      roi.y,
+      roi.width,
+      roi.height,
+      0,
+      0,
+      CONFIG.inputWidth,
+      CONFIG.inputHeight
+    );
+
+    const rgba = modelContext.getImageData(
+      0,
+      0,
+      CONFIG.inputWidth,
+      CONFIG.inputHeight
+    ).data;
+
+    const rgb = new Uint8Array(
+      CONFIG.inputWidth * CONFIG.inputHeight * 3
+    );
+
+    for (
+      let source = 0, destination = 0;
+      source < rgba.length;
+      source += 4
+    ) {
+      rgb[destination++] = rgba[source];
+      rgb[destination++] = rgba[source + 1];
+      rgb[destination++] = rgba[source + 2];
+    }
+
+    // Chỉ cập nhật ảnh chẩn đoán khi người dùng mở mục này.
+    if ($('diagnostics').open) {
+      previewContext.drawImage(modelCanvas, 0, 0);
+    }
+
+    return new ort.Tensor('uint8', rgb, [
+      1,
+      CONFIG.inputHeight,
+      CONFIG.inputWidth,
+      3
+    ]);
+  }
+
+  // ==========================================================
+  // GIẢI MÃ OCR
+  // Xử lý cả xác suất và logits.
+  // ==========================================================
+
+  function decode(output) {
+    const vocab = CONFIG.alphabet.length;
+
+    if (
+      !output ||
+      output.dims.length !== 3 ||
+      output.dims[0] !== 1 ||
+      output.dims[1] !== CONFIG.plateSlots ||
+      output.dims[2] !== vocab
+    ) {
+      throw new Error('Đầu ra OCR không đúng [1,10,37].');
+    }
+
+    let raw = '';
+    let plate = '';
+    let total = 0;
+    let minimum = 1;
+    let count = 0;
+
+    for (let slot = 0; slot < CONFIG.plateSlots; slot++) {
+      const offset = slot * vocab;
+
+      let best = 0;
+      let maximum = -Infinity;
+      let minimumValue = Infinity;
+      let sum = 0;
+
+      for (let j = 0; j < vocab; j++) {
+        const value = Number(output.data[offset + j]);
+
+        if (!Number.isFinite(value)) {
+          throw new Error('Model trả điểm không hợp lệ.');
+        }
+
+        sum += value;
+        minimumValue = Math.min(minimumValue, value);
+
+        if (value > maximum) {
+          maximum = value;
+          best = j;
+        }
+      }
+
+      const isProbability =
+        minimumValue >= 0 &&
+        maximum <= 1 &&
+        Math.abs(sum - 1) < 0.08;
+
+      let confidence = maximum;
+
+      if (!isProbability) {
+        let denominator = 0;
+
+        for (let j = 0; j < vocab; j++) {
+          denominator += Math.exp(
+            Number(output.data[offset + j]) - maximum
+          );
+        }
+
+        confidence = 1 / denominator;
+      }
+
+      const character = CONFIG.alphabet[best];
+      raw += character;
+
+      if (character !== '_') {
+        plate += character;
+        total += confidence;
+        minimum = Math.min(minimum, confidence);
+        count++;
+      }
+    }
+
+    return {
+      raw,
+      plate,
+      mean: count ? total / count : 0,
+      minimum: count ? minimum : 0
+    };
+  }
+
+  // Bộ lọc các dạng BKS phổ biến trong nhóm xe đang thử nghiệm.
+  // Không phải bộ xác thực toàn bộ loại biển số Việt Nam.
+  function isPlausiblePlate(plate) {
+    return /^\d{2}[A-Z]{1,2}\d{4,5}$/.test(plate);
+  }
+
+  function acceptResult(result) {
+    const now = performance.now();
+
+    const plausible = isPlausiblePlate(result.plate);
+
+    const confident =
+      result.mean >= CONFIG.minMeanScore &&
+      result.minimum >= CONFIG.minCharScore;
+
+    let reason = '';
+
+    if (!plausible) {
+      clearCandidate();
+      reason = 'Chưa đúng mẫu BKS đang hỗ trợ';
+    } else if (!confident) {
+      clearCandidate();
+      reason = 'Điểm OCR chưa đạt ngưỡng';
+    } else {
+      const sameCandidate =
+        state.candidate === result.plate &&
+        now - state.lastCandidateAt <= CONFIG.maxCandidateGapMs;
+
+      state.hits = sameCandidate ? state.hits + 1 : 1;
+      state.candidate = result.plate;
+      state.lastCandidateAt = now;
+
+      reason =
+        'Xác nhận ' +
+        Math.min(state.hits, CONFIG.stableRequired) +
+        '/' + CONFIG.stableRequired;
+
+      if (state.hits >= CONFIG.stableRequired) {
+        state.shownPlate = result.plate;
+        state.lastConfirmedAt = now;
+
+        showResult(
+          result.plate,
+          'BKS nhận diện được · Chưa tra cứu UT.',
+          true
+        );
+
+        return 'Đã nhận diện ổn định';
+      }
+    }
+
+    // Xóa kết quả cũ nếu không còn được xác nhận.
+    if (
+      !state.shownPlate ||
+      now - state.lastConfirmedAt > CONFIG.resultHoldMs
+    ) {
+      state.shownPlate = '';
+
+      showResult(
+        'Đang tìm biển số…',
+        'Đưa BKS vào giữa khung, chữ đủ lớn và rõ.'
+      );
+    }
+
+    return reason;
+  }
+
+  // ==========================================================
+  // QUÉT TỰ ĐỘNG
+  // Không chạy nhiều lượt ONNX đồng thời.
+  // ==========================================================
+
+  function schedule(token, delay) {
+    if (
+      !state.running ||
+      token !== state.generation ||
+      document.hidden
+    ) {
+      return;
+    }
+
+    clearTimeout(state.timer);
+
+    state.timer = setTimeout(
+      () => scan(token),
+      delay
+    );
+  }
+
+  async function scan(token) {
+    if (
+      !state.running ||
+      token !== state.generation ||
+      document.hidden
+    ) {
+      return;
+    }
+
+    if (state.inferenceBusy) {
+      schedule(token, 50);
+      return;
+    }
+
+    if (
+      video.readyState < 2 ||
+      !video.videoWidth ||
+      !video.videoHeight
+    ) {
+      schedule(token, 100);
+      return;
+    }
+
+    if (video.currentTime === state.lastFrameTime) {
+      schedule(token, 100);
+      return;
+    }
+
+    state.lastFrameTime = video.currentTime;
+    state.inferenceBusy = true;
+
+    const began = performance.now();
+
+    let input;
+    let outputs;
+
+    try {
+      updateGuide();
+      input = makeTensor();
+
+      outputs = await state.session.run({
+        [state.session.inputNames[0]]: input
+      });
+
+      if (
+        token !== state.generation ||
+        !state.running
+      ) {
+        return;
+      }
+
+      const decoded = decode(outputs.plate);
+      const reason = acceptResult(decoded);
+
+      state.scanCount++;
+
+      $('debugText').textContent = [
+        'Lượt đọc: ' + state.scanCount,
+        'Model đọc: ' + (decoded.raw || '(trống)'),
+        'BKS: ' + (decoded.plate || '(trống)'),
+        'Điểm trung bình: ' + decoded.mean.toFixed(3),
+        'Ký tự thấp nhất: ' + decoded.minimum.toFixed(3),
+        'Thời gian xử lý: ' +
+          Math.round(performance.now() - began) + ' ms',
+        'Trạng thái: ' + reason
+      ].join('\n');
+
+    } catch (error) {
+      if (token === state.generation) {
+        showError(error);
+      }
+    } finally {
+      if (input) input.dispose();
+
+      if (outputs) {
+        Object.values(outputs).forEach(output => output.dispose());
+      }
+
+      state.inferenceBusy = false;
+
+      const elapsed = performance.now() - began;
+
+      schedule(
+        token,
+        Math.max(0, CONFIG.scanIntervalMs - elapsed)
+      );
+    }
+  }
+
+  // ==========================================================
+  // SỰ KIỆN
+  // ==========================================================
+
+  retryButton.addEventListener('click', startScanner);
+
+  video.addEventListener('loadedmetadata', updateGuide);
+  video.addEventListener('resize', updateGuide);
+
+  $('diagnostics').addEventListener('toggle', () => {
+    if ($('diagnostics').open) {
+      previewContext.drawImage(modelCanvas, 0, 0);
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopScanner();
+      setSystem('Tạm dừng');
+
+      showResult(
+        'Đã tạm dừng',
+        'Quay lại trang để tiếp tục quét.'
+      );
+    } else {
+      startScanner();
+    }
+  });
+
+  window.addEventListener('pagehide', stopScanner);
+
+  window.addEventListener('pageshow', () => {
+    if (!document.hidden) startScanner();
+  });
+
+  startScanner();
+})();
+</script>
 </body>
 </html>
