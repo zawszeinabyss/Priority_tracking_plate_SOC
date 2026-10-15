@@ -179,6 +179,48 @@
       line-height: 1.7;
       text-align: center;
     }
+  form {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+form input {
+  min-width: 0;
+  flex: 1;
+  padding: 14px 10px;
+  border: 1px solid #344661;
+  border-radius: 10px;
+  background: #080d1d;
+  color: white;
+  font: inherit;
+  font-size: 16px;
+}
+
+form button {
+  padding: 12px;
+  border: 0;
+  border-radius: 10px;
+  background: #3489c7;
+  color: white;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+form button:disabled {
+  opacity: .5;
+}
+
+.result.priority {
+  background: #112b22;
+  border-color: #65c879;
+}
+
+.result.regular {
+  background: #352219;
+  border-color: #e4a678;
+}
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.wasm.min.js"></script>
@@ -217,17 +259,50 @@
     <p id="status">Đang khởi động camera và OCR.</p>
   </section>
 
-  <details id="diagnostics">
+  <details id="diagnostics" hidden>
     <summary>Chẩn đoán OCR</summary>
     <p id="debugText">Chưa có lượt đọc.</p>
     <div>Ảnh thực tế đưa vào model:</div>
     <canvas id="preview" width="128" height="64"></canvas>
   </details>
 
-  <footer>
-    Bản OCR DEV 03 · Tự động quét<br>
-    Chưa kết nối UT · Chưa lưu lượt quét
-  </footer>
+ <section id="connectionPanel" class="result">
+  <label for="accessKey">Kết nối danh sách UT</label>
+
+  <form id="connectionForm">
+    <input
+      id="accessKey"
+      type="password"
+      placeholder="Nhập khóa kết nối"
+      autocomplete="off"
+      required
+    >
+    <button id="connectButton" type="submit">Kết nối</button>
+  </form>
+</section>
+
+<section class="result">
+  <label for="manualInput">Nhập biển số dự phòng</label>
+
+  <form id="manualForm">
+    <input
+      id="manualInput"
+      type="text"
+      placeholder="VD: 50E-504.74"
+      maxlength="30"
+      autocomplete="off"
+      autocapitalize="characters"
+      spellcheck="false"
+      required
+    >
+    <button type="submit">Kiểm tra</button>
+  </form>
+</section>
+
+<p id="sourceStatus" role="status"
+   style="color:#a5b6ce;font-size:12px;text-align:center;">
+  Chưa kết nối danh sách UT.
+</p>
 
   <canvas id="modelCanvas" width="128" height="64" hidden></canvas>
 </main>
@@ -318,6 +393,8 @@
   }
 
   function showResult(plate, message, detected = false) {
+    $('result').classList.remove('priority', 'regular');
+
     if ($('plate').textContent !== plate) {
       $('plate').textContent = plate;
     }
@@ -328,7 +405,7 @@
 
     $('result').classList.toggle('detected', detected);
   }
-
+  
   function resetRecognition() {
     state.candidate = '';
     state.hits = 0;
@@ -760,7 +837,13 @@
 
   function acceptResult(result) {
     const now = performance.now();
-
+    if (
+  document.activeElement === $('manualInput') ||
+  now < manualHoldUntil
+) {
+  clearCandidate();
+  return 'Đang ưu tiên nhập tay';
+}
     const plausible = isPlausiblePlate(result.plate);
 
     const confident =
@@ -793,11 +876,7 @@
         state.shownPlate = result.plate;
         state.lastConfirmedAt = now;
 
-        showResult(
-          result.plate,
-          'BKS nhận diện được · Chưa tra cứu UT.',
-          true
-        );
+        showResult(result.plate);
 
         return 'Đã nhận diện ổn định';
       }
@@ -933,6 +1012,233 @@
   // ==========================================================
   // SỰ KIỆN
   // ==========================================================
+  // ==========================================================
+// DANH SÁCH UT + NHẬP TAY
+// ==========================================================
+
+const UT_API_URL = 'DAN_URL_API_MOI_VAO_DAY';
+const UT_REFRESH_MS = 30000;
+
+// Giới hạn thời gian từ lần tải thành công gần nhất.
+// Đây không phải thời điểm nguồn gốc cập nhật.
+const UT_MAX_DOWNLOAD_AGE_MS = 120000;
+
+let utKey = '';
+let utSnapshot = null;
+let utLoading = false;
+let utTimer = null;
+
+let manualHoldUntil = 0;
+let lastLookupPlate = '';
+
+function normalizeLookupPlate(value) {
+  return String(value || '')
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+function scheduleUTRefresh() {
+  clearTimeout(utTimer);
+
+  if (utKey && !document.hidden) {
+    utTimer = setTimeout(refreshUT, UT_REFRESH_MS);
+  }
+}
+
+async function refreshUT() {
+  if (!utKey || utLoading) return;
+
+  utLoading = true;
+  clearTimeout(utTimer);
+
+  $('connectButton').disabled = true;
+  $('sourceStatus').textContent = 'Đang tải danh sách UT…';
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25000);
+
+  try {
+    const response = await fetch(UT_API_URL, {
+      method: 'POST',
+      redirect: 'follow',
+      credentials: 'omit',
+
+      // text/plain tránh yêu cầu preflight cho request này.
+      headers: {
+        'Content-Type': 'text/plain;charset=UTF-8'
+      },
+
+      body: JSON.stringify({
+        action: 'source',
+        key: utKey
+      }),
+
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      throw new Error('API trả HTTP ' + response.status);
+    }
+
+    let payload;
+
+    try {
+      payload = await response.json();
+    } catch {
+      throw new Error(
+        'API không trả JSON. Kiểm tra URL /exec và quyền deployment.'
+      );
+    }
+
+    if (!payload.ok) {
+      if (payload.code === 'UNAUTHORIZED') {
+        utKey = '';
+        utSnapshot = null;
+        $('connectionPanel').hidden = false;
+      }
+
+      throw new Error(payload.message || 'Không tải được nguồn UT.');
+    }
+
+    if (
+      payload.sourceType !== 'CURRENT_UT_LIST' ||
+      !Array.isArray(payload.plates) ||
+      !payload.plates.length ||
+      payload.plates.some(
+        plate =>
+          typeof plate !== 'string' ||
+          !plate ||
+          plate !== normalizeLookupPlate(plate)
+      )
+    ) {
+      throw new Error('Danh sách UT trả về không đúng cấu trúc.');
+    }
+
+    const plates = new Set(payload.plates);
+
+    if (
+      plates.size !== payload.count ||
+      plates.size !== payload.plates.length
+    ) {
+      throw new Error('Số lượng BKS UT không khớp.');
+    }
+
+    utSnapshot = {
+      plates,
+      downloadedAtMs: Date.now()
+    };
+
+    $('connectionPanel').hidden = true;
+    $('accessKey').value = '';
+
+    $('sourceStatus').textContent =
+      'Sẵn sàng · ' + plates.size + ' xe UT';
+
+  } catch (error) {
+    const canUsePrevious =
+      utSnapshot &&
+      Date.now() - utSnapshot.downloadedAtMs <=
+        UT_MAX_DOWNLOAD_AGE_MS;
+
+    $('sourceStatus').textContent = canUsePrevious
+      ? 'Đang dùng bản UT đã tải · Tự kết nối lại.'
+      : (
+          error.name === 'AbortError'
+            ? 'Tải UT quá lâu. Đang thử kết nối lại.'
+            : error.message
+        );
+  } finally {
+    clearTimeout(timeout);
+    utLoading = false;
+    $('connectButton').disabled = false;
+
+    // Cập nhật kết quả đang hiển thị khi danh sách thay đổi.
+    if (lastLookupPlate && $('plate').textContent === lastLookupPlate) {
+      showUTResult(lastLookupPlate);
+    }
+
+    scheduleUTRefresh();
+  }
+}
+
+function showUTResult(rawPlate) {
+  const plate = normalizeLookupPlate(rawPlate);
+  lastLookupPlate = plate;
+
+  const available =
+    utSnapshot &&
+    Date.now() - utSnapshot.downloadedAtMs <=
+      UT_MAX_DOWNLOAD_AGE_MS;
+
+  if (!available) {
+    showResult(
+      plate,
+      'Chưa có danh sách UT khả dụng. Đang chờ kết nối.'
+    );
+
+    $('result').classList.remove('priority', 'regular');
+    return;
+  }
+
+  const priority = utSnapshot.plates.has(plate);
+
+  showResult(
+    plate,
+    priority ? 'Ưu tiên' : 'Không ưu tiên'
+  );
+
+  $('result').classList.toggle('priority', priority);
+  $('result').classList.toggle('regular', !priority);
+}
+
+$('connectionForm').addEventListener('submit', event => {
+  event.preventDefault();
+
+  const value = $('accessKey').value.trim();
+
+  if (!value) return;
+
+  // Chỉ giữ khóa trong bộ nhớ của tab.
+  utKey = value;
+  refreshUT();
+});
+
+$('manualForm').addEventListener('submit', event => {
+  event.preventDefault();
+
+  const plate = normalizeLookupPlate($('manualInput').value);
+
+  // Dùng cùng bộ lọc BKS đang hỗ trợ cho OCR.
+  if (!isPlausiblePlate(plate)) {
+    showResult(
+      'Kiểm tra lại BKS',
+      'Ví dụ: 50E-504.74 hoặc 50E50474.'
+    );
+    return;
+  }
+
+  // Kết quả nhập tay giữ 5 giây, OCR không ghi đè ngay.
+  manualHoldUntil = performance.now() + 5000;
+
+  clearCandidate();
+  state.shownPlate = plate;
+  state.lastConfirmedAt = performance.now();
+
+  showUTResult(plate);
+
+  $('manualInput').value = plate;
+  $('manualInput').blur();
+});
+
+document.addEventListener('visibilitychange', () => {
+  clearTimeout(utTimer);
+
+  if (!document.hidden && utKey) {
+    refreshUT();
+  }
+});
 
   retryButton.addEventListener('click', startScanner);
 
