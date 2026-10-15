@@ -1,183 +1,185 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport"
-        content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#080d1d">
-  <title>Truck Check</title>
+<meta charset="utf-8">
+<meta name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080d1d">
+<title>Truck Check V05</title>
 
-  <style>
-    * { box-sizing: border-box; }
-    [hidden] { display: none !important; }
+<style>
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
 
-    body {
-      margin: 0;
-      background: #080d1d;
-      color: #f1f5ff;
-      font-family: system-ui, -apple-system, sans-serif;
-    }
+  body {
+    margin: 0;
+    background: #080d1d;
+    color: #eef4ff;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
 
-    main {
-      max-width: 560px;
-      margin: auto;
-      padding: 22px 16px;
-    }
+  main {
+    max-width: 560px;
+    padding: 22px 16px;
+    margin: auto;
+  }
 
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 18px;
-    }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
 
-    .brand {
-      color: #80cfff;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 2px;
-    }
+  .brand {
+    color: #80cfff;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 2px;
+  }
 
-    h1 { margin: 8px 0 0; font-size: 30px; }
+  h1 { margin: 8px 0 0; font-size: 30px; }
 
-    #system {
-      padding: 8px 10px;
-      border-radius: 20px;
-      background: #142139;
-      color: #a9d9ff;
-      font-size: 12px;
-      white-space: nowrap;
-    }
+  .badge {
+    padding: 8px 12px;
+    background: #142139;
+    color: #a9d9ff;
+    border-radius: 20px;
+    font-size: 12px;
+  }
 
-    .viewer {
-      position: relative;
-      overflow: hidden;
-      border-radius: 18px;
-      background: #000;
-      min-height: 160px;
-    }
+  .viewer {
+    position: relative;
+    min-height: 160px;
+    overflow: hidden;
+    background: #000;
+    border-radius: 18px;
+  }
 
-    video {
-      display: block;
-      width: 100%;
-      height: auto;
-    }
+  video {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
 
-    #guide {
-      position: absolute;
-      outline: 2px solid #80cfff;
-      border-radius: 10px;
-      box-shadow: 0 0 0 1000px #0006;
-      pointer-events: none;
-    }
+  #guide {
+    position: absolute;
+    outline: 2px solid #80cfff;
+    border-radius: 10px;
+    box-shadow: 0 0 0 1000px #0006;
+    pointer-events: none;
+  }
 
-    #guide span {
-      position: absolute;
-      bottom: -26px;
-      width: 100%;
-      text-align: center;
-      font-size: 10px;
-      letter-spacing: 1px;
-    }
+  #guide span {
+    position: absolute;
+    bottom: -25px;
+    width: 100%;
+    font-size: 10px;
+    text-align: center;
+  }
 
-    .card {
-      margin-top: 18px;
-      padding: 20px 16px;
-      border: 1px solid #344661;
-      border-radius: 18px;
-      background: #111b30;
-    }
+  .card {
+    margin-top: 18px;
+    padding: 20px 16px;
+    background: #111b30;
+    border: 1px solid #344661;
+    border-radius: 18px;
+  }
 
-    #result { text-align: center; }
+  #result { text-align: center; }
 
-    #result.priority {
-      background: #112b22;
-      border-color: #65c879;
-    }
+  #result.priority {
+    background: #112b22;
+    border-color: #65c879;
+  }
 
-    #result.regular {
-      background: #352219;
-      border-color: #e4a678;
-    }
+  #result.regular {
+    background: #352219;
+    border-color: #e4a678;
+  }
 
-    #plate {
-      margin: 0;
-      font-size: clamp(24px, 7vw, 36px);
-      overflow-wrap: anywhere;
-    }
+  #plate {
+    margin: 0;
+    font-size: clamp(24px, 7vw, 36px);
+    overflow-wrap: anywhere;
+  }
 
-    #resultText {
-      margin: 12px 0 0;
-      color: #c4d1e3;
-      font-size: 19px;
-      line-height: 1.5;
-    }
+  #resultText {
+    font-size: 18px;
+    color: #c4d1e3;
+    line-height: 1.6;
+    margin-bottom: 0;
+  }
 
-    label { display: block; font-weight: 600; }
+  label {
+    display: block;
+    margin: 12px 0 8px;
+    font-weight: 600;
+    font-size: 14px;
+  }
 
-    input, button {
-      font: inherit;
-      border-radius: 10px;
-      padding: 13px 11px;
-    }
+  input, button {
+    font: inherit;
+    font-size: 16px;
+    border-radius: 10px;
+    padding: 13px 11px;
+  }
 
-    input {
-      width: 100%;
-      min-width: 0;
-      border: 1px solid #344661;
-      background: #080d1d;
-      color: white;
-      font-size: 16px;
-    }
+  input {
+    width: 100%;
+    min-width: 0;
+    color: white;
+    background: #080d1d;
+    border: 1px solid #344661;
+  }
 
-    button {
-      border: 0;
-      background: #3489c7;
-      color: white;
-      font-weight: 700;
-      cursor: pointer;
-    }
+  input:focus {
+    outline: 2px solid #3489c7;
+  }
 
-    button:disabled { opacity: .5; cursor: wait; }
+  button {
+    border: 0;
+    color: white;
+    background: #3489c7;
+    font-weight: 700;
+    cursor: pointer;
+  }
 
-    #manualForm {
-      display: flex;
-      gap: 8px;
-      margin-top: 12px;
-    }
+  button:disabled { opacity: .5; cursor: wait; }
 
-    #manualInput { flex: 1; text-transform: uppercase; }
+  #manualForm {
+    display: flex;
+    gap: 8px;
+  }
 
-    #connectionForm input,
-    #connectionForm button {
-      margin-top: 12px;
-      width: 100%;
-    }
+  #manualInput { flex: 1; text-transform: uppercase; }
 
-    #retryCamera { width: 100%; margin-top: 12px; }
+  #connectButton, #retryCamera {
+    width: 100%;
+    margin-top: 12px;
+  }
 
-    .note, #sourceStatus, #connectionMessage {
-      color: #9eb0cb;
-      font-size: 12px;
-      line-height: 1.6;
-      overflow-wrap: anywhere;
-    }
+  summary { cursor: pointer; font-weight: 700; }
 
-    #sourceStatus { text-align: center; }
+  .note, #sourceStatus, #connectionMessage, footer {
+    font-size: 12px;
+    color: #a5b6ce;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
 
-    #settingsButton {
-      display: block;
-      margin: 0 auto;
-      padding: 5px;
-      background: transparent;
-      color: #8195b3;
-      font-size: 12px;
-      font-weight: 400;
-    }
-  </style>
+  #connectionMessage {
+    white-space: pre-line;
+    color: #ffd39a;
+  }
 
-  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.wasm.min.js"></script>
+  #sourceStatus, footer { text-align: center; }
+
+  footer { margin-top: 18px; }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.wasm.min.js"></script>
 </head>
 
 <body>
@@ -187,7 +189,7 @@
       <div class="brand">BD MEGA · TRUCK CHECK</div>
       <h1>Quét BKS</h1>
     </div>
-    <div id="system" role="status">Khởi động</div>
+    <span class="badge">V05</span>
   </header>
 
   <section class="viewer">
@@ -201,7 +203,8 @@
     Chạm để mở lại camera
   </button>
 
-  <section id="result" class="card" aria-live="polite" aria-atomic="true">
+  <section id="result" class="card"
+           aria-live="polite" aria-atomic="true">
     <h2 id="plate">Đang chuẩn bị…</h2>
     <p id="resultText">Đang khởi động camera.</p>
   </section>
@@ -215,41 +218,49 @@
              autocomplete="off"
              autocapitalize="characters"
              spellcheck="false"
-             enterkeyhint="go"
              required>
       <button type="submit">Kiểm tra</button>
     </form>
   </section>
 
-  <section id="connectionPanel" class="card">
-    <label for="apiInput">Kết nối danh sách UT</label>
-    <p class="note">
-      Nhập Web app URL của Truck Check API và khóa kết nối.
-      Thông tin được nhớ trong phiên của tab này.
-    </p>
+  <details id="connectionPanel" class="card" open>
+    <summary>Cài đặt kết nối UT</summary>
 
     <form id="connectionForm">
+      <label for="apiInput">Web app URL Apps Script</label>
       <input id="apiInput"
              type="url"
              placeholder="https://script.google.com/macros/s/.../exec"
              autocomplete="off"
+             autocapitalize="off"
              spellcheck="false"
              required>
 
+      <p class="note">
+        Dán URL của project Truck Check API có hàm doPost.
+        Không dùng URL GitHub hoặc URL editor Apps Script.
+      </p>
+
+      <label for="keyInput">Khóa UT_ACCESS_KEY</label>
       <input id="keyInput"
              type="password"
-             placeholder="Khóa UT_ACCESS_KEY"
+             placeholder="Nhập khóa đã đặt trong Script properties"
              autocomplete="off"
              required>
 
-      <button id="connectButton" type="submit">Kết nối</button>
+      <button id="connectButton" type="submit">
+        Lưu và kết nối
+      </button>
     </form>
 
     <p id="connectionMessage" role="status"></p>
-  </section>
+  </details>
 
-  <p id="sourceStatus" role="status">Chưa kết nối danh sách UT.</p>
-  <button id="settingsButton" type="button">Cài đặt kết nối</button>
+  <p id="sourceStatus" role="status">
+    Chưa kết nối danh sách UT.
+  </p>
+
+  <footer>Truck Check V05 · Chưa ghi log lượt quét</footer>
 
   <canvas id="modelCanvas" width="128" height="64" hidden></canvas>
 </main>
@@ -258,28 +269,44 @@
 (() => {
   'use strict';
 
-  const CONFIG = Object.freeze({
+  // Có thể điền URL cố định ở đây, hoặc nhập ngay trên giao diện.
+  // Không điền khóa truy cập vào code GitHub.
+  const UT_API_URL = '';
+
+  const CFG = Object.freeze({
     modelUrl: new URL('./cct_xs_v2_global.onnx', location.href).href,
     runtimePath:
       'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/',
     alphabet: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_',
-    scanIntervalMs: 300,
+    scanMs: 300,
     stableRequired: 2,
-    minMeanScore: 0.70,
-    minCharScore: 0.40,
-    resultHoldMs: 1800,
-    manualHoldMs: 5000,
-    sourceRefreshMs: 30000,
-    maxDownloadAgeMs: 120000
+    minMean: 0.70,
+    minChar: 0.40,
+    refreshMs: 30000,
+    maxSourceAgeMs: 120000,
+    ocrHoldMs: 1800,
+    manualHoldMs: 5000
   });
 
   const $ = id => document.getElementById(id);
   const video = $('video');
   const canvas = $('modelCanvas');
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  const STORAGE_KEY = 'truck_check_connection_v2';
 
-  const camera = {
+  const URL_STORAGE = 'truck_check_api_url_v05';
+  const SESSION_STORAGE = 'truck_check_session_v05';
+
+  const ut = {
+    url: '',
+    key: '',
+    snapshot: null,
+    loading: false,
+    timer: null,
+    error: '',
+    blocked: false
+  };
+
+  const cam = {
     session: null,
     modelPromise: null,
     stream: null,
@@ -294,20 +321,11 @@
     candidateAt: 0
   };
 
-  const source = {
-    url: '',
-    key: '',
-    snapshot: null,
-    loading: false,
-    timer: null,
-    error: ''
-  };
-
   let selectedPlate = '';
   let selectedUntil = 0;
   let manualUntil = 0;
 
-  function normalizePlate(value) {
+  function normalize(value) {
     return String(value || '')
       .toUpperCase()
       .normalize('NFD')
@@ -315,8 +333,7 @@
       .replace(/[^A-Z0-9]/g, '');
   }
 
-  function validPlate(plate) {
-    // Các dạng BKS phổ biến của nhóm xe đang thử nghiệm.
+  function plausible(plate) {
     return /^\d{2}[A-Z]{1,2}\d{4,5}$/.test(plate);
   }
 
@@ -328,20 +345,18 @@
     }
   }
 
-  function sourceUsable() {
-    return source.snapshot &&
-      Date.now() - source.snapshot.downloadedAt <=
-        CONFIG.maxDownloadAgeMs;
+  function sourceReady() {
+    return !!ut.snapshot &&
+      Date.now() - ut.snapshot.downloadedAt <= CFG.maxSourceAgeMs;
   }
 
-  function showLookup(plate) {
-    if (!sourceUsable()) {
+  function lookup(plate) {
+    if (!sourceReady()) {
       render(plate, 'Chưa có dữ liệu UT khả dụng.');
       return;
     }
 
-    const priority = source.snapshot.plates.has(plate);
-
+    const priority = ut.snapshot.plates.has(plate);
     render(
       plate,
       priority ? 'Ưu tiên' : 'Không ưu tiên',
@@ -349,44 +364,39 @@
     );
   }
 
-  function refreshSelectedResult() {
-    if (selectedPlate && performance.now() < selectedUntil) {
-      showLookup(selectedPlate);
-    } else if (selectedPlate) {
+  function refreshResult() {
+    if (!selectedPlate) return;
+
+    if (performance.now() < selectedUntil) {
+      lookup(selectedPlate);
+    } else {
       selectedPlate = '';
-      if (camera.running) {
+      if (cam.running) {
         render('Đang tìm biển số…', 'Đưa BKS vào giữa khung.');
       }
     }
   }
 
-  function updateSourceStatus() {
-    if (source.loading && !source.snapshot) {
-      $('sourceStatus').textContent = 'Đang tải danh sách UT…';
-    } else if (sourceUsable()) {
+  function sourceStatus() {
+    if (ut.loading && !ut.snapshot) {
+      $('sourceStatus').textContent = 'Đang kết nối API…';
+    } else if (sourceReady()) {
       $('sourceStatus').textContent =
-        source.snapshot.plates.size + ' xe UT' +
-        (source.error ? ' · Đang dùng bản đã tải' : ' · Đã kết nối');
+        ut.snapshot.plates.size + ' xe UT · ' +
+        (ut.error ? 'Đang dùng bản đã tải' : 'Đã kết nối');
     } else {
       $('sourceStatus').textContent =
-        source.error ||
-        (source.snapshot
-          ? 'Danh sách UT chưa được tải lại. Đang kết nối…'
-          : 'Chưa kết nối danh sách UT.');
+        ut.error || 'Chưa kết nối danh sách UT.';
     }
   }
 
-  // ========================================================
-  // API UT
-  // ========================================================
-
-  function validateApiUrl(value) {
+  function validateUrl(raw) {
     let url;
 
     try {
-      url = new URL(value.trim());
+      url = new URL(String(raw || '').trim());
     } catch {
-      throw new Error('URL API không hợp lệ.');
+      throw new Error('Bạn chưa nhập Web app URL hợp lệ.');
     }
 
     if (
@@ -396,51 +406,49 @@
       url.search || url.hash || url.username || url.password
     ) {
       throw new Error(
-        'Cần URL https://script.google.com/macros/s/.../exec của Truck Check API.'
+        'URL phải có dạng https://script.google.com/macros/s/.../exec'
       );
     }
 
     return url.href;
   }
 
-  function saveConnection() {
-    try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
-        url: source.url,
-        key: source.key
-      }));
-    } catch {
-      // Nếu lưu bị chặn, thông tin vẫn được giữ trong bộ nhớ tab.
-    }
+  function forgetSession() {
+    try { sessionStorage.removeItem(SESSION_STORAGE); } catch {}
   }
 
-  function clearSavedConnection() {
+  function saveConnection() {
+    try { localStorage.setItem(URL_STORAGE, ut.url); } catch {}
     try {
-      sessionStorage.removeItem(STORAGE_KEY);
+      sessionStorage.setItem(SESSION_STORAGE, JSON.stringify({
+        url: ut.url,
+        key: ut.key
+      }));
     } catch {}
   }
 
   function scheduleSource() {
-    clearTimeout(source.timer);
+    clearTimeout(ut.timer);
 
-    if (source.url && source.key && !document.hidden) {
-      source.timer = setTimeout(loadSource, CONFIG.sourceRefreshMs);
+    if (ut.url && ut.key && !ut.blocked && !document.hidden) {
+      ut.timer = setTimeout(loadSource, CFG.refreshMs);
     }
   }
 
   async function loadSource() {
-    if (source.loading || !source.url || !source.key) return;
+    if (ut.loading || !ut.url || !ut.key || ut.blocked) return;
 
-    source.loading = true;
-    clearTimeout(source.timer);
+    ut.loading = true;
+    clearTimeout(ut.timer);
     $('connectButton').disabled = true;
-    updateSourceStatus();
+    $('connectionMessage').textContent = 'Đang gọi API…';
+    sourceStatus();
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25000);
 
     try {
-      const endpoint = validateApiUrl(source.url);
+      const endpoint = validateUrl(ut.url);
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -451,188 +459,186 @@
         },
         body: JSON.stringify({
           action: 'source',
-          key: source.key
+          key: ut.key
         }),
         signal: controller.signal
       });
 
-      if (response.status === 405) {
-        throw new Error(
-          'HTTP 405: kiểm tra URL API, hàm doPost và deployment New version.'
-        );
-      }
-
       if (!response.ok) {
+        if ([401, 403, 404, 405].includes(response.status)) {
+          ut.blocked = true;
+        }
+
+        if (response.status === 405) {
+          throw new Error(
+            'HTTP 405: endpoint không nhận POST.\n' +
+            'Trong Truck Check API, kiểm tra có doPost(e), ' +
+            'sau đó Deploy → Manage deployments → New version.\n' +
+            'Copy đúng URL /exec của deployment API vào ô phía trên.'
+          );
+        }
+
         throw new Error('API trả HTTP ' + response.status);
       }
 
       let payload;
-
       try {
         payload = await response.json();
       } catch {
+        ut.blocked = true;
         throw new Error(
-          'API không trả JSON. Kiểm tra đúng deployment API và quyền Anyone.'
+          'API trả trang HTML thay vì JSON. Kiểm tra đúng URL API, ' +
+          'Execute as: Me và Who has access: Anyone.'
         );
       }
 
       if (!payload || payload.ok !== true) {
+        if (
+          payload &&
+          ['UNAUTHORIZED', 'NOT_CONFIGURED', 'INVALID_ACTION']
+            .includes(payload.code)
+        ) {
+          ut.blocked = true;
+        }
+
         if (payload && payload.code === 'UNAUTHORIZED') {
-          source.key = '';
-          source.snapshot = null;
-          clearSavedConnection();
-          $('connectionPanel').hidden = false;
+          ut.snapshot = null;
+          forgetSession();
         }
 
         throw new Error(
           payload && payload.message
             ? payload.message
-            : 'API từ chối yêu cầu.'
+            : 'API không trả kết quả hợp lệ.'
         );
       }
 
       if (
         payload.sourceType !== 'CURRENT_UT_LIST' ||
         !Array.isArray(payload.plates) ||
-        payload.plates.length === 0 ||
+        !payload.plates.length ||
         payload.plates.some(plate =>
           typeof plate !== 'string' ||
           !plate ||
-          plate !== normalizePlate(plate) ||
+          plate !== normalize(plate) ||
           !/[A-Z]/.test(plate) ||
           !/[0-9]/.test(plate)
         )
       ) {
-        throw new Error('Dữ liệu UT không đúng cấu trúc.');
+        ut.blocked = true;
+        throw new Error('API trả dữ liệu không đúng cấu trúc CURRENT_UT_LIST.');
       }
 
       const plates = new Set(payload.plates);
 
       if (
-        plates.size !== payload.plates.length ||
-        plates.size !== payload.count
+        plates.size !== payload.count ||
+        plates.size !== payload.plates.length
       ) {
         throw new Error('Số lượng BKS UT không khớp.');
       }
 
-      source.snapshot = {
+      ut.snapshot = {
         plates,
         downloadedAt: Date.now()
       };
 
-      source.error = '';
+      ut.error = '';
       saveConnection();
 
       $('keyInput').value = '';
-      $('connectionMessage').textContent = '';
-      $('connectionPanel').hidden = true;
+      $('connectionMessage').textContent =
+        'Kết nối thành công. Danh sách tự tải lại mỗi 30 giây.';
+      $('connectionPanel').open = false;
 
     } catch (error) {
-      source.error =
-        error.name === 'AbortError'
-          ? 'Tải UT quá lâu. Đang thử kết nối lại.'
-          : (
-              error.message === 'Failed to fetch'
-                ? 'Không gọi được API. Kiểm tra mạng, URL và quyền deployment.'
-                : error.message
-            );
+      ut.error = error.name === 'AbortError'
+        ? 'Kết nối quá 25 giây. Kiểm tra mạng và deployment.'
+        : error.message;
 
-      $('connectionMessage').textContent = source.error;
-
-      if (!source.snapshot) {
-        $('connectionPanel').hidden = false;
+      if (ut.error === 'Failed to fetch') {
+        ut.error =
+          'Trình duyệt không đọc được phản hồi API. ' +
+          'Kiểm tra mạng, quyền deployment và lượt chạy doPost trong Executions.';
       }
+
+      $('connectionMessage').textContent = ut.error;
+      if (!sourceReady() || ut.blocked) $('connectionPanel').open = true;
+
     } finally {
       clearTimeout(timeout);
-      source.loading = false;
+      ut.loading = false;
       $('connectButton').disabled = false;
-      updateSourceStatus();
-      refreshSelectedResult();
+      sourceStatus();
+      refreshResult();
       scheduleSource();
     }
   }
 
   $('connectionForm').addEventListener('submit', event => {
     event.preventDefault();
-    if (source.loading) return;
+    if (ut.loading) return;
 
     try {
-      const url = validateApiUrl($('apiInput').value);
-      const key = $('keyInput').value.trim();
+      const url = validateUrl($('apiInput').value);
+      const key = $('keyInput').value.trim() ||
+        (url === ut.url ? ut.key : '');
 
-      if (!key) {
-        throw new Error('Vui lòng nhập khóa UT_ACCESS_KEY.');
+      if (!key) throw new Error('Bạn chưa nhập khóa UT_ACCESS_KEY.');
+
+      if (url !== ut.url || key !== ut.key) {
+        ut.snapshot = null;
+        forgetSession();
       }
 
-      // Đổi kết nối thì bỏ dữ liệu của kết nối trước.
-      if (url !== source.url || key !== source.key) {
-        source.snapshot = null;
-        clearSavedConnection();
-      }
+      ut.url = url;
+      ut.key = key;
+      ut.error = '';
+      ut.blocked = false;
 
-      source.url = url;
-      source.key = key;
-      source.error = '';
-      $('connectionMessage').textContent = 'Đang kết nối…';
+      try { localStorage.setItem(URL_STORAGE, url); } catch {}
 
-      refreshSelectedResult();
+      refreshResult();
       loadSource();
     } catch (error) {
       $('connectionMessage').textContent = error.message;
     }
   });
 
-  $('settingsButton').addEventListener('click', () => {
-    $('connectionPanel').hidden = !$('connectionPanel').hidden;
-    $('apiInput').value = source.url;
-    // Không điền lại khóa vào giao diện.
-  });
-
-  // ========================================================
-  // NHẬP TAY
-  // ========================================================
-
   $('manualForm').addEventListener('submit', event => {
     event.preventDefault();
 
-    const plate = normalizePlate($('manualInput').value);
-    manualUntil = performance.now() + CONFIG.manualHoldMs;
+    const plate = normalize($('manualInput').value);
+    manualUntil = performance.now() + CFG.manualHoldMs;
+    cam.candidate = '';
+    cam.hits = 0;
 
-    camera.candidate = '';
-    camera.hits = 0;
-
-    if (!validPlate(plate)) {
+    if (!plausible(plate)) {
       selectedPlate = '';
-      render(
-        'Kiểm tra lại BKS',
-        'Ví dụ: 50E-504.74 hoặc 50E50474.'
-      );
+      render('Kiểm tra lại BKS', 'Ví dụ: 50E-504.74 hoặc 50E50474.');
       return;
     }
 
     selectedPlate = plate;
     selectedUntil = manualUntil;
-
-    showLookup(plate);
+    lookup(plate);
 
     $('manualInput').value = plate;
     $('manualInput').blur();
   });
 
-  // ========================================================
-  // MODEL ONNX
-  // ========================================================
+  // ===================== ONNX =====================
 
   async function loadModel() {
-    if (camera.session) return camera.session;
-    if (camera.modelPromise) return camera.modelPromise;
+    if (cam.session) return cam.session;
+    if (cam.modelPromise) return cam.modelPromise;
 
-    camera.modelPromise = (async () => {
+    cam.modelPromise = (async () => {
       if (!window.ort) {
         throw new Error('Không tải được thư viện OCR. Hãy tải lại trang.');
       }
 
-      ort.env.wasm.wasmPaths = CONFIG.runtimePath;
+      ort.env.wasm.wasmPaths = CFG.runtimePath;
       ort.env.wasm.numThreads = 1;
       ort.env.wasm.proxy = false;
 
@@ -641,7 +647,7 @@
       let bytes;
 
       try {
-        const response = await fetch(CONFIG.modelUrl, {
+        const response = await fetch(CFG.modelUrl, {
           signal: controller.signal
         });
 
@@ -664,14 +670,14 @@
         throw new Error('Model không có đầu ra plate.');
       }
 
-      camera.session = session;
+      cam.session = session;
       return session;
     })();
 
     try {
-      return await camera.modelPromise;
+      return await cam.modelPromise;
     } finally {
-      camera.modelPromise = null;
+      cam.modelPromise = null;
     }
   }
 
@@ -731,8 +737,7 @@
 
   function decode(output) {
     if (
-      !output ||
-      output.dims.length !== 3 ||
+      !output || output.dims.length !== 3 ||
       output.dims[0] !== 1 ||
       output.dims[1] !== 10 ||
       output.dims[2] !== 37
@@ -754,10 +759,7 @@
 
       for (let j = 0; j < 37; j++) {
         const value = Number(output.data[offset + j]);
-
-        if (!Number.isFinite(value)) {
-          throw new Error('Điểm OCR không hợp lệ.');
-        }
+        if (!Number.isFinite(value)) throw new Error('Điểm OCR không hợp lệ.');
 
         sum += value;
         lowest = Math.min(lowest, value);
@@ -780,7 +782,7 @@
         confidence = 1 / denominator;
       }
 
-      const character = CONFIG.alphabet[best];
+      const character = CFG.alphabet[best];
 
       if (character !== '_') {
         plate += character;
@@ -800,38 +802,33 @@
   function acceptOcr(result) {
     const now = performance.now();
 
-    if (
-      document.activeElement === $('manualInput') ||
-      now < manualUntil
-    ) {
-      camera.candidate = '';
-      camera.hits = 0;
+    if (document.activeElement === $('manualInput') || now < manualUntil) {
+      cam.candidate = '';
+      cam.hits = 0;
       return;
     }
 
-    const good =
-      validPlate(result.plate) &&
-      result.mean >= CONFIG.minMeanScore &&
-      result.minimum >= CONFIG.minCharScore;
+    const good = plausible(result.plate) &&
+      result.mean >= CFG.minMean &&
+      result.minimum >= CFG.minChar;
 
     if (good) {
-      const same =
-        result.plate === camera.candidate &&
-        now - camera.candidateAt <= 2000;
+      const same = result.plate === cam.candidate &&
+        now - cam.candidateAt <= 2000;
 
-      camera.hits = same ? camera.hits + 1 : 1;
-      camera.candidate = result.plate;
-      camera.candidateAt = now;
+      cam.hits = same ? cam.hits + 1 : 1;
+      cam.candidate = result.plate;
+      cam.candidateAt = now;
 
-      if (camera.hits >= CONFIG.stableRequired) {
+      if (cam.hits >= CFG.stableRequired) {
         selectedPlate = result.plate;
-        selectedUntil = now + CONFIG.resultHoldMs;
-        showLookup(selectedPlate);
+        selectedUntil = now + CFG.ocrHoldMs;
+        lookup(selectedPlate);
         return;
       }
     } else {
-      camera.candidate = '';
-      camera.hits = 0;
+      cam.candidate = '';
+      cam.hits = 0;
     }
 
     if (now >= selectedUntil) {
@@ -840,23 +837,20 @@
     }
   }
 
-  // ========================================================
-  // CAMERA + QUÉT LIÊN TỤC
-  // ========================================================
+  // ===================== CAMERA =====================
 
   function stopCamera() {
-    camera.generation++;
-    clearTimeout(camera.timer);
+    cam.generation++;
+    clearTimeout(cam.timer);
+    cam.running = false;
+    cam.starting = false;
+    cam.candidate = '';
+    cam.hits = 0;
+    cam.lastFrame = -1;
 
-    camera.running = false;
-    camera.starting = false;
-    camera.candidate = '';
-    camera.hits = 0;
-    camera.lastFrame = -1;
-
-    if (camera.stream) {
-      camera.stream.getTracks().forEach(track => track.stop());
-      camera.stream = null;
+    if (cam.stream) {
+      cam.stream.getTracks().forEach(track => track.stop());
+      cam.stream = null;
     }
 
     video.pause();
@@ -867,21 +861,17 @@
   function cameraError(error) {
     stopCamera();
 
-    $('system').textContent = 'Camera/OCR lỗi';
-    $('retryCamera').hidden = false;
-    $('retryCamera').disabled = false;
-
     const messages = {
-      NotAllowedError: 'Cho phép camera rồi chạm để thử lại.',
+      NotAllowedError: 'Cần cho phép truy cập camera.',
       NotFoundError: 'Không tìm thấy camera.',
       NotReadableError: 'Camera đang bận hoặc không đọc được.',
-      AbortError: 'Tải model quá lâu. Kiểm tra mạng rồi thử lại.'
+      AbortError: 'Tải OCR quá lâu. Kiểm tra mạng.'
     };
 
-    const message = messages[error.name] || error.message;
-
-    // Lỗi camera không chặn chức năng nhập tay.
-    $('retryCamera').textContent = message + ' · Thử lại';
+    $('retryCamera').hidden = false;
+    $('retryCamera').disabled = false;
+    $('retryCamera').textContent =
+      (messages[error.name] || error.message) + ' · Thử lại';
 
     if (!selectedPlate) {
       render('Camera chưa sẵn sàng', 'Bạn vẫn có thể nhập BKS bên dưới.');
@@ -889,18 +879,16 @@
   }
 
   async function startCamera() {
-    if (camera.starting || camera.running || document.hidden) return;
+    if (cam.starting || cam.running || document.hidden) return;
 
-    const token = ++camera.generation;
-    camera.starting = true;
-
+    const token = ++cam.generation;
+    cam.starting = true;
     $('retryCamera').hidden = true;
     $('retryCamera').disabled = true;
-    $('system').textContent = 'Khởi động';
 
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error('Mở trang HTTPS trực tiếp bằng Safari hoặc Chrome.');
+        throw new Error('Mở trang HTTPS bằng Safari hoặc Chrome.');
       }
 
       const modelTask = loadModel().then(
@@ -917,34 +905,30 @@
         }
       });
 
-      if (token !== camera.generation || document.hidden) {
+      if (token !== cam.generation || document.hidden) {
         stream.getTracks().forEach(track => track.stop());
         return;
       }
 
-      camera.stream = stream;
+      cam.stream = stream;
       video.srcObject = stream;
 
       stream.getVideoTracks()[0].addEventListener('ended', () => {
-        if (token === camera.generation) {
-          cameraError(new Error('Camera đã ngắt.'));
-        }
+        if (token === cam.generation) cameraError(new Error('Camera đã ngắt.'));
       });
 
       await video.play();
-      if (token !== camera.generation) return;
+      if (token !== cam.generation) return;
 
       updateGuide();
 
       const loaded = await modelTask;
-      if (token !== camera.generation) return;
+      if (token !== cam.generation) return;
       if (loaded.error) throw loaded.error;
 
-      camera.starting = false;
-      camera.running = true;
-      camera.lastFrame = -1;
-
-      $('system').textContent = 'Đang quét';
+      cam.starting = false;
+      cam.running = true;
+      cam.lastFrame = -1;
 
       if (!selectedPlate) {
         render('Đang tìm biển số…', 'Đưa BKS vào giữa khung.');
@@ -952,36 +936,35 @@
 
       scheduleScan(token, 0);
     } catch (error) {
-      if (token === camera.generation) cameraError(error);
+      if (token === cam.generation) cameraError(error);
     }
   }
 
   function scheduleScan(token, delay) {
-    if (!camera.running || token !== camera.generation || document.hidden) return;
-    clearTimeout(camera.timer);
-    camera.timer = setTimeout(() => scan(token), delay);
+    if (!cam.running || token !== cam.generation || document.hidden) return;
+    clearTimeout(cam.timer);
+    cam.timer = setTimeout(() => scan(token), delay);
   }
 
   async function scan(token) {
-    if (!camera.running || token !== camera.generation || document.hidden) return;
+    if (!cam.running || token !== cam.generation || document.hidden) return;
 
-    if (camera.busy) {
+    if (cam.busy) {
       scheduleScan(token, 50);
       return;
     }
 
     if (
       video.readyState < 2 ||
-      !video.videoWidth ||
-      !video.videoHeight ||
-      video.currentTime === camera.lastFrame
+      !video.videoWidth || !video.videoHeight ||
+      video.currentTime === cam.lastFrame
     ) {
       scheduleScan(token, 100);
       return;
     }
 
-    camera.lastFrame = video.currentTime;
-    camera.busy = true;
+    cam.lastFrame = video.currentTime;
+    cam.busy = true;
 
     const began = performance.now();
     let input;
@@ -991,31 +974,28 @@
       updateGuide();
       input = makeTensor();
 
-      outputs = await camera.session.run({
-        [camera.session.inputNames[0]]: input
+      outputs = await cam.session.run({
+        [cam.session.inputNames[0]]: input
       });
 
-      if (token !== camera.generation || !camera.running) return;
-
+      if (token !== cam.generation || !cam.running) return;
       acceptOcr(decode(outputs.plate));
     } catch (error) {
-      if (token === camera.generation) cameraError(error);
+      if (token === cam.generation) cameraError(error);
     } finally {
       if (input) input.dispose();
       if (outputs) Object.values(outputs).forEach(output => output.dispose());
 
-      camera.busy = false;
+      cam.busy = false;
 
       scheduleScan(
         token,
-        Math.max(0, CONFIG.scanIntervalMs - (performance.now() - began))
+        Math.max(0, CFG.scanMs - (performance.now() - began))
       );
     }
   }
 
-  // ========================================================
-  // KHỞI ĐỘNG / QUAY LẠI TAB
-  // ========================================================
+  // ===================== KHỞI ĐỘNG =====================
 
   $('retryCamera').addEventListener('click', startCamera);
   video.addEventListener('loadedmetadata', updateGuide);
@@ -1024,17 +1004,16 @@
   function resume() {
     if (document.hidden) return;
     startCamera();
-    if (source.url && source.key) loadSource();
+    if (ut.url && ut.key && !ut.blocked) loadSource();
   }
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       stopCamera();
-      clearTimeout(source.timer);
+      clearTimeout(ut.timer);
       selectedPlate = '';
       selectedUntil = 0;
       manualUntil = 0;
-      $('system').textContent = 'Tạm dừng';
       render('Đã tạm dừng', 'Quay lại trang để tiếp tục.');
     } else {
       resume();
@@ -1043,30 +1022,36 @@
 
   window.addEventListener('pagehide', () => {
     stopCamera();
-    clearTimeout(source.timer);
+    clearTimeout(ut.timer);
   });
 
   window.addEventListener('pageshow', resume);
 
-  // Cập nhật trạng thái khi bản tải xuống quá hạn hoặc kết quả cũ hết hạn.
   setInterval(() => {
     if (!document.hidden) {
-      updateSourceStatus();
-      refreshSelectedResult();
+      sourceStatus();
+      refreshResult();
     }
   }, 1000);
 
   try {
-    const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null');
+    const savedUrl = localStorage.getItem(URL_STORAGE) || UT_API_URL;
+    if (savedUrl) {
+      ut.url = validateUrl(savedUrl);
+      $('apiInput').value = ut.url;
+    }
+  } catch {}
 
-    if (saved && typeof saved.key === 'string' && saved.key) {
-      source.url = validateApiUrl(saved.url);
-      source.key = saved.key;
-      $('apiInput').value = source.url;
-      $('connectionPanel').hidden = true;
+  try {
+    const saved = JSON.parse(
+      sessionStorage.getItem(SESSION_STORAGE) || 'null'
+    );
+
+    if (saved && saved.url === ut.url && typeof saved.key === 'string') {
+      ut.key = saved.key;
     }
   } catch {
-    clearSavedConnection();
+    forgetSession();
   }
 
   resume();
