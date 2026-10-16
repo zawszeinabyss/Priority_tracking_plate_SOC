@@ -5,7 +5,7 @@
 <meta name="viewport"
       content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080d1d">
-<title>Truck Check V06</title>
+<title>Truck Check V06 · Mobile</title>
 
 <style>
   * { box-sizing: border-box; }
@@ -183,6 +183,29 @@
   #accountEmail {font-size:13px;overflow-wrap:anywhere}
   #logoutButton {font-size:13px;padding:10px}
   #loginButton,#checkLogin {width:100%;margin:8px 0}
+
+/* Compact mobile scanner */
+main{max-width:520px;padding:12px 12px calc(12px + env(safe-area-inset-bottom));}
+header{margin-bottom:10px;gap:8px}.brand{font-size:10px;letter-spacing:1.5px}
+h1{margin-top:4px;font-size:25px}.badge{padding:6px 10px;white-space:nowrap}
+#accountBar{margin:0 0 10px;padding:8px 10px;gap:8px;border-radius:12px}
+#accountEmail{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+#logoutButton{flex-shrink:0;min-height:40px;padding:8px 10px;font-size:12px}
+.viewer{width:100%;height:220px;height:clamp(180px,32svh,260px);min-height:0;border-radius:16px}
+#video{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover;object-position:center}
+#guide{border-radius:12px;outline:2px solid #80cfff}
+#guide span{bottom:-24px;font-size:10px;line-height:16px;white-space:nowrap;text-shadow:0 1px 4px #000}
+.card{margin-top:10px;padding:12px;border-radius:14px}
+#result{padding:12px 10px}#plate{margin:0;font-size:clamp(24px,7vw,32px);line-height:1.2}
+#resultText{margin:6px 0 0;font-size:14px;line-height:1.4}
+label[for="manualInput"]{margin:0 0 8px;font-size:13px}
+#manualForm{display:flex;gap:8px}
+#manualForm input,#manualForm button{min-height:44px;padding:10px;font-size:16px}
+#manualInput{flex:1;min-width:0}#manualForm button{flex-shrink:0}
+#sourceStatus,footer{margin:8px 0 0;font-size:10px;line-height:1.4}
+#retryCamera{min-height:44px;margin-top:8px}
+@media(max-height:700px){.viewer{height:180px}main{padding-top:8px}header{margin-bottom:8px}#accountBar{margin-bottom:8px}}
+
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.wasm.min.js"></script>
@@ -408,7 +431,7 @@
       throw new Error('Admin cần điền UT_API_URL đúng trong index.html.');
     }
     const control = new AbortController();
-    const timer = setTimeout(() => control.abort(), 25000);
+    const timer = setTimeout(() => control.abort(), 60000);
     try {
       const response = await fetch(UT_API_URL, {
         method:'POST', redirect:'follow', credentials:'omit',
@@ -425,7 +448,7 @@
       }
       return result;
     } catch (err) {
-      if (err.name === 'AbortError') throw new Error('Kết nối quá 25 giây. Hãy kiểm tra mạng rồi thử lại.');
+      if (err.name === 'AbortError') throw new Error('Kết nối quá 60 giây. Hãy kiểm tra mạng rồi thử lại.');
       if (err.message === 'Failed to fetch') throw new Error('Không đọc được API. Kiểm tra mạng, URL và quyền deployment.');
       throw err;
     } finally { clearTimeout(timer); }
@@ -633,38 +656,41 @@
     }
   }
 
-  function getRoi() {
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
-
-    let width = vw * 0.86;
-    let height = width / 2;
-
-    if (height > vh * 0.48) {
-      height = vh * 0.48;
-      width = height * 2;
-    }
-
+  function getScanGeometry() {
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const box = video.getBoundingClientRect();
+    if (!vw || !vh || !box.width || !box.height) return null;
+    const scale = Math.max(box.width / vw, box.height / vh);
+    const offsetX = (vw * scale - box.width) / 2;
+    const offsetY = (vh * scale - box.height) / 2;
+    const width = Math.min(box.width * 0.88, Math.max(1, box.height - 64) * 2);
+    const height = width / 2;
+    const left = (box.width - width) / 2;
+    const top = (box.height - height) / 2 - 8;
     return {
-      x: (vw - width) / 2,
-      y: (vh - height) / 2,
-      width,
-      height
+      display: {left, top, width, height},
+      source: {x:(left + offsetX)/scale, y:(top + offsetY)/scale,
+               width:width/scale, height:height/scale}
     };
   }
-
+  function getRoi() {
+    const geometry = getScanGeometry();
+    if (!geometry) throw new Error('Camera chưa có khung hình để đọc.');
+    return geometry.source;
+  }
   function updateGuide() {
-    if (!video.videoWidth || !video.videoHeight) return;
-
-    const roi = getRoi();
+    const geometry = getScanGeometry();
     const guide = $('guide');
-
-    guide.style.left = roi.x / video.videoWidth * 100 + '%';
-    guide.style.top = roi.y / video.videoHeight * 100 + '%';
-    guide.style.width = roi.width / video.videoWidth * 100 + '%';
-    guide.style.height = roi.height / video.videoHeight * 100 + '%';
+    if (!geometry) { guide.hidden = true; return; }
+    const rect = geometry.display;
+    guide.style.left = rect.left + 'px';
+    guide.style.top = rect.top + 'px';
+    guide.style.width = rect.width + 'px';
+    guide.style.height = rect.height + 'px';
     guide.hidden = false;
   }
+  window.addEventListener('resize', updateGuide);
+  video.addEventListener('loadedmetadata', updateGuide);
 
   function makeTensor() {
     const roi = getRoi();
