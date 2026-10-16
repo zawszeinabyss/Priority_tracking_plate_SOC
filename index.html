@@ -5,7 +5,7 @@
 <meta name="viewport"
       content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080d1d">
-<title>Truck Check V05</title>
+<title>Truck Check V06</title>
 
 <style>
   * { box-sizing: border-box; }
@@ -177,6 +177,12 @@
   #sourceStatus, footer { text-align: center; }
 
   footer { margin-top: 18px; }
+  #loginMessage {white-space:pre-line;line-height:1.6;color:#c4d1e3}
+  #loginLink {display:block;margin:16px 0;color:#80cfff}
+  #accountBar {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+  #accountEmail {font-size:13px;overflow-wrap:anywhere}
+  #logoutButton {font-size:13px;padding:10px}
+  #loginButton,#checkLogin {width:100%;margin:8px 0}
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.wasm.min.js"></script>
@@ -189,9 +195,22 @@
       <div class="brand">BD MEGA · TRUCK CHECK</div>
       <h1>Quét BKS</h1>
     </div>
-    <span class="badge">V05</span>
+    <span class="badge">V06</span>
   </header>
 
+  <section id="loginGate" class="card">
+    <h2>Đăng nhập để quét BKS</h2>
+    <p class="note">Dùng tài khoản Google đã được admin thêm vào Users.</p>
+    <button id="loginButton" type="button">Đăng nhập Google</button>
+    <p id="loginMessage" role="status"></p>
+    <a id="loginLink" target="_blank" rel="noopener noreferrer" hidden>Mở trang cấp quyền Google</a>
+    <button id="checkLogin" type="button" hidden>Tôi đã xác nhận · Kiểm tra lại</button>
+  </section>
+  <section id="accountBar" class="card" hidden>
+    <span id="accountEmail"></span>
+    <button id="logoutButton" type="button">Đăng xuất</button>
+  </section>
+  <div id="scannerContent" hidden>
   <section class="viewer">
     <video id="video" autoplay muted playsinline></video>
     <div id="guide" hidden>
@@ -223,44 +242,12 @@
     </form>
   </section>
 
-  <details id="connectionPanel" class="card" open>
-    <summary>Cài đặt kết nối UT</summary>
-
-    <form id="connectionForm">
-      <label for="apiInput">Web app URL Apps Script</label>
-      <input id="apiInput"
-             type="url"
-             placeholder="https://script.google.com/macros/s/.../exec"
-             autocomplete="off"
-             autocapitalize="off"
-             spellcheck="false"
-             required>
-
-      <p class="note">
-        Dán URL của project Truck Check API có hàm doPost.
-        Không dùng URL GitHub hoặc URL editor Apps Script.
-      </p>
-
-      <label for="keyInput">Khóa UT_ACCESS_KEY</label>
-      <input id="keyInput"
-             type="password"
-             placeholder="Nhập khóa đã đặt trong Script properties"
-             autocomplete="off"
-             required>
-
-      <button id="connectButton" type="submit">
-        Lưu và kết nối
-      </button>
-    </form>
-
-    <p id="connectionMessage" role="status"></p>
+  <p id="sourceStatus" role="status">Đang tải danh sách UT…</p>
+  <details id="adminPanel" class="card" hidden><summary>Chẩn đoán · Admin</summary>
+    <p id="adminStatus" class="note"></p>
   </details>
-
-  <p id="sourceStatus" role="status">
-    Chưa kết nối danh sách UT.
-  </p>
-
-  <footer>Truck Check V05 · Chưa ghi log lượt quét</footer>
+  </div>
+  <footer>Truck Check V06 · Chưa ghi log lượt quét</footer>
 
   <canvas id="modelCanvas" width="128" height="64" hidden></canvas>
 </main>
@@ -269,9 +256,9 @@
 (() => {
   'use strict';
 
-  // Có thể điền URL cố định ở đây, hoặc nhập ngay trên giao diện.
-  // Không điền khóa truy cập vào code GitHub.
-  const UT_API_URL = '';
+  // URL công khai của deployment API V06. Không đặt secret trong HTML.
+  const UT_API_URL = 'https://script.google.com/macros/s/AKfycby_ljyTi44AEj4uOYoQ690bSkw2gzAePiXwJL-9brYAMMgcmIUp7ilSJiD7NOQPOzVrMA/exec';
+  const LOGIN_URL = 'https://script.google.com/macros/s/AKfycbz5CqGC2pso4pttjPk72Q3WRRg9LDy3bGrjBrpEUXmfZ1ckFZMsQIFnE-3dpUl_4a77Pw/exec';
 
   const CFG = Object.freeze({
     modelUrl: new URL('./cct_xs_v2_global.onnx', location.href).href,
@@ -293,19 +280,10 @@
   const canvas = $('modelCanvas');
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-  const URL_STORAGE = 'truck_check_api_url_v05';
-  const SESSION_STORAGE = 'truck_check_session_v05';
-
-  const ut = {
-    url: '',
-    key: '',
-    snapshot: null,
-    loading: false,
-    timer: null,
-    error: '',
-    blocked: false
-  };
-
+  const AUTH_STORAGE = 'truck_check_login_v06';
+  const PENDING_STORAGE = 'truck_check_pending_v06';
+  const auth = {token:'',user:null,expiresAt:0,verifiedAt:0,epoch:0,pending:null,pollTimer:null,polling:false};
+  const ut = {snapshot:null,loading:false,timer:null,error:''};
   const cam = {
     session: null,
     modelPromise: null,
@@ -346,7 +324,7 @@
   }
 
   function sourceReady() {
-    return !!ut.snapshot &&
+    return allowed() && !!ut.snapshot &&
       Date.now() - ut.snapshot.downloadedAt <= CFG.maxSourceAgeMs;
   }
 
@@ -377,237 +355,211 @@
     }
   }
 
+  function allowed() {
+    return !!auth.token && !!auth.user && Date.now() < auth.expiresAt &&
+      Date.now() - auth.verifiedAt < 90000;
+  }
+
   function sourceStatus() {
-    if (ut.loading && !ut.snapshot) {
-      $('sourceStatus').textContent = 'Đang kết nối API…';
-    } else if (sourceReady()) {
-      $('sourceStatus').textContent =
-        ut.snapshot.plates.size + ' xe UT · ' +
-        (ut.error ? 'Đang dùng bản đã tải' : 'Đã kết nối');
-    } else {
-      $('sourceStatus').textContent =
-        ut.error || 'Chưa kết nối danh sách UT.';
+    $('sourceStatus').textContent = ut.error || (sourceReady()
+      ? 'Danh sách UT đã kết nối.' : 'Đang tải danh sách UT…');
+    if (auth.user?.role === 'ADMIN') {
+      $('adminStatus').textContent = (ut.snapshot?.plates.size || 0) +
+        ' BKS · API V06 · Quyền được kiểm tra lại khi tải nguồn mỗi 30 giây. ' +
+        'Thời điểm tải không phải thời điểm IMPORTRANGE làm mới.';
     }
   }
 
-  function validateUrl(raw) {
-    let url;
+  function saveSession() {
+    try { sessionStorage.setItem(AUTH_STORAGE, JSON.stringify({
+      token:auth.token, expiresAt:auth.expiresAt
+    })); } catch (_) {}
+  }
 
+  function clearPending() {
+    clearTimeout(auth.pollTimer);
+    auth.pending = null;
+    try { sessionStorage.removeItem(PENDING_STORAGE); } catch (_) {}
+    $('loginLink').hidden = true;
+    $('loginLink').removeAttribute('href');
+    $('checkLogin').hidden = true;
+  }
+
+  function closeSession(message = 'Vui lòng đăng nhập để tiếp tục.') {
+    auth.epoch++;
+    auth.token = ''; auth.user = null; auth.expiresAt = 0; auth.verifiedAt = 0;
+    ut.snapshot = null; ut.error = '';
+    clearTimeout(ut.timer); clearPending(); stopCamera();
+    selectedPlate = ''; selectedUntil = 0; manualUntil = 0;
+    $('manualInput').value = '';
+    $('scannerContent').hidden = true;
+    $('accountBar').hidden = true;
+    $('adminPanel').hidden = true;
+    $('accountEmail').textContent = '';
+    $('loginGate').hidden = false;
+    $('loginButton').disabled = false;
+    $('loginButton').textContent = 'Đăng nhập Google';
+    $('loginMessage').textContent = message;
+    try { sessionStorage.removeItem(AUTH_STORAGE); } catch (_) {}
+  }
+
+  async function apiCall(body) {
+    if (!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(UT_API_URL)) {
+      throw new Error('Admin cần điền UT_API_URL đúng trong index.html.');
+    }
+    const control = new AbortController();
+    const timer = setTimeout(() => control.abort(), 25000);
     try {
-      url = new URL(String(raw || '').trim());
-    } catch {
-      throw new Error('Bạn chưa nhập Web app URL hợp lệ.');
-    }
-
-    if (
-      url.protocol !== 'https:' ||
-      url.hostname !== 'script.google.com' ||
-      !/^\/macros\/s\/[^/]+\/exec$/.test(url.pathname) ||
-      url.search || url.hash || url.username || url.password
-    ) {
-      throw new Error(
-        'URL phải có dạng https://script.google.com/macros/s/.../exec'
-      );
-    }
-
-    return url.href;
+      const response = await fetch(UT_API_URL, {
+        method:'POST', redirect:'follow', credentials:'omit',
+        headers:{'Content-Type':'text/plain;charset=UTF-8'},
+        body:JSON.stringify(body), signal:control.signal
+      });
+      if (!response.ok) throw new Error('API HTTP ' + response.status + '. Kiểm tra URL /exec và deployment API V06.');
+      let result;
+      try { result = await response.json(); }
+      catch (_) { throw new Error('API trả HTML. Kiểm tra deployment API: Execute as Me, access Anyone.'); }
+      if (!result || result.ok !== true) {
+        const err = new Error(result?.message || 'API trả kết quả không hợp lệ.');
+        err.code = result?.code; throw err;
+      }
+      return result;
+    } catch (err) {
+      if (err.name === 'AbortError') throw new Error('Kết nối quá 25 giây. Hãy kiểm tra mạng rồi thử lại.');
+      if (err.message === 'Failed to fetch') throw new Error('Không đọc được API. Kiểm tra mạng, URL và quyền deployment.');
+      throw err;
+    } finally { clearTimeout(timer); }
   }
 
-  function forgetSession() {
-    try { sessionStorage.removeItem(SESSION_STORAGE); } catch {}
+  function randomHex() {
+    return Array.from(crypto.getRandomValues(new Uint8Array(32)), x => x.toString(16).padStart(2,'0')).join('');
+  }
+  async function sha256(text) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(digest), x => x.toString(16).padStart(2,'0')).join('');
+  }
+  function showPending() {
+    const p = auth.pending;
+    if (!p) return;
+    $('loginMessage').textContent = 'Mã đối chiếu: ' + p.challenge.slice(0,8).toUpperCase() +
+      '\nMở trang Google, xác nhận đúng mã và email, rồi quay lại tab này.';
+    $('loginLink').href = LOGIN_URL + '?challenge=' + p.challenge;
+    $('loginLink').hidden = false;
+    $('checkLogin').hidden = false;
+    $('loginButton').textContent = 'Bắt đầu đăng nhập lại';
   }
 
-  function saveConnection() {
-    try { localStorage.setItem(URL_STORAGE, ut.url); } catch {}
+  $('loginButton').addEventListener('click', async () => {
+    // Open during the user's gesture so Safari can open a separate tab.
+    const popup = window.open('about:blank','_blank');
+    if (popup) popup.opener = null;
+    closeSession('Đang chuẩn bị đăng nhập…');
+    const epoch = auth.epoch;
+    $('loginButton').disabled = true;
     try {
-      sessionStorage.setItem(SESSION_STORAGE, JSON.stringify({
-        url: ut.url,
-        key: ut.key
-      }));
-    } catch {}
+      const verifier = randomHex();
+      const challenge = await sha256(verifier);
+      const r = await apiCall({action:'begin', challenge});
+      if (epoch !== auth.epoch) { if(popup) popup.close(); return; }
+      auth.pending = {verifier, challenge, expiresAt:r.expiresAt};
+      try { sessionStorage.setItem(PENDING_STORAGE, JSON.stringify(auth.pending)); } catch (_) {}
+      showPending();
+      if (popup) popup.location.replace(LOGIN_URL + '?challenge=' + challenge);
+      schedulePoll();
+    } catch (err) {
+      if (popup) popup.close();
+      if (epoch === auth.epoch) $('loginMessage').textContent = err.message;
+    } finally { if (epoch === auth.epoch) $('loginButton').disabled = false; }
+  });
+
+  function schedulePoll() {
+    clearTimeout(auth.pollTimer);
+    if (auth.pending && !document.hidden) auth.pollTimer = setTimeout(pollLogin, 4000);
   }
+
+  async function pollLogin() {
+    const p = auth.pending;
+    if (!p || auth.polling || document.hidden) return;
+    if (Date.now() >= p.expiresAt) { closeSession('Lượt đăng nhập hết hạn. Bấm Đăng nhập Google để thử lại.'); return; }
+    const epoch = auth.epoch;
+    auth.polling = true;
+    $('checkLogin').disabled = true;
+    try {
+      const r = await apiCall({action:'exchange',verifier:p.verifier});
+      if (epoch !== auth.epoch || auth.pending !== p) return;
+      if (r.status === 'PENDING') return;
+      if (r.status !== 'AUTHORIZED' || !/^[A-Za-z0-9_-]{43}$/.test(r.sessionToken || '') ||
+          !Number.isFinite(r.expiresAt)) throw new Error('Phản hồi đăng nhập không hợp lệ.');
+      auth.token = r.sessionToken; auth.expiresAt = r.expiresAt;
+      clearPending(); saveSession();
+      $('loginMessage').textContent = 'Đã đăng nhập. Đang tải danh sách UT…';
+      await loadSource();
+    } catch (err) {
+      if (epoch !== auth.epoch) return;
+      if (['FORBIDDEN','LOGIN_EXPIRED','UNAUTHORIZED'].includes(err.code)) closeSession(err.message);
+      else $('loginMessage').textContent = err.message + '\nBạn có thể bấm Kiểm tra lại.';
+    } finally {
+      auth.polling = false;
+      $('checkLogin').disabled = false;
+      schedulePoll();
+    }
+  }
+
+  $('checkLogin').addEventListener('click', pollLogin);
+  $('logoutButton').addEventListener('click', () => {
+    const token = auth.token;
+    closeSession('Bạn đã đăng xuất.');
+    if (token) void apiCall({action:'logout',sessionToken:token}).catch(() => {});
+  });
 
   function scheduleSource() {
     clearTimeout(ut.timer);
-
-    if (ut.url && ut.key && !ut.blocked && !document.hidden) {
-      ut.timer = setTimeout(loadSource, CFG.refreshMs);
-    }
+    if (auth.token && !document.hidden) ut.timer = setTimeout(loadSource, CFG.refreshMs);
   }
 
   async function loadSource() {
-    if (ut.loading || !ut.url || !ut.key || ut.blocked) return;
-
+    if (ut.loading || !auth.token || document.hidden) return;
     ut.loading = true;
+    const epoch = auth.epoch;
     clearTimeout(ut.timer);
-    $('connectButton').disabled = true;
-    $('connectionMessage').textContent = 'Đang gọi API…';
-    sourceStatus();
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
-
     try {
-      const endpoint = validateUrl(ut.url);
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        redirect: 'follow',
-        credentials: 'omit',
-        headers: {
-          'Content-Type': 'text/plain;charset=UTF-8'
-        },
-        body: JSON.stringify({
-          action: 'source',
-          key: ut.key
-        }),
-        signal: controller.signal
-      });
-
-      if (!response.ok) {
-        if ([401, 403, 404, 405].includes(response.status)) {
-          ut.blocked = true;
-        }
-
-        if (response.status === 405) {
-          throw new Error(
-            'HTTP 405: endpoint không nhận POST.\n' +
-            'Trong Truck Check API, kiểm tra có doPost(e), ' +
-            'sau đó Deploy → Manage deployments → New version.\n' +
-            'Copy đúng URL /exec của deployment API vào ô phía trên.'
-          );
-        }
-
-        throw new Error('API trả HTTP ' + response.status);
+      const r = await apiCall({action:'source',sessionToken:auth.token});
+      if (epoch !== auth.epoch) return;
+      if (!r.user || !['ADMIN','SCANNER'].includes(r.user.role) ||
+          typeof r.user.email !== 'string' || !r.user.email ||
+          !Number.isFinite(r.user.expiresAt) || r.user.expiresAt <= Date.now() ||
+          r.sourceType !== 'CURRENT_UT_LIST' || !Array.isArray(r.plates) || !r.plates.length ||
+          r.plates.some(p => typeof p !== 'string' || p !== normalize(p) || !/[A-Z]/.test(p) || !/[0-9]/.test(p))) {
+        throw new Error('API trả dữ liệu không đúng cấu trúc V06.');
       }
-
-      let payload;
-      try {
-        payload = await response.json();
-      } catch {
-        ut.blocked = true;
-        throw new Error(
-          'API trả trang HTML thay vì JSON. Kiểm tra đúng URL API, ' +
-          'Execute as: Me và Who has access: Anyone.'
-        );
+      const plates = new Set(r.plates);
+      if (plates.size !== r.count || plates.size !== r.plates.length) throw new Error('Số lượng BKS UT không khớp.');
+      auth.user = r.user; auth.expiresAt = r.user.expiresAt; auth.verifiedAt = Date.now();
+      ut.snapshot = {plates,downloadedAt:Date.now()}; ut.error = '';
+      $('loginGate').hidden = true;
+      $('scannerContent').hidden = false;
+      $('accountBar').hidden = false;
+      $('accountEmail').textContent = auth.user.email;
+      $('adminPanel').hidden = auth.user.role !== 'ADMIN';
+      saveSession();
+      void startCamera();
+    } catch (err) {
+      if (epoch !== auth.epoch) return;
+      if (['UNAUTHORIZED','FORBIDDEN'].includes(err.code)) closeSession(err.message);
+      else {
+        ut.error = err.message;
+        $('loginMessage').textContent = err.message + '\nĐang thử tải lại…';
       }
-
-      if (!payload || payload.ok !== true) {
-        if (
-          payload &&
-          ['UNAUTHORIZED', 'NOT_CONFIGURED', 'INVALID_ACTION']
-            .includes(payload.code)
-        ) {
-          ut.blocked = true;
-        }
-
-        if (payload && payload.code === 'UNAUTHORIZED') {
-          ut.snapshot = null;
-          forgetSession();
-        }
-
-        throw new Error(
-          payload && payload.message
-            ? payload.message
-            : 'API không trả kết quả hợp lệ.'
-        );
-      }
-
-      if (
-        payload.sourceType !== 'CURRENT_UT_LIST' ||
-        !Array.isArray(payload.plates) ||
-        !payload.plates.length ||
-        payload.plates.some(plate =>
-          typeof plate !== 'string' ||
-          !plate ||
-          plate !== normalize(plate) ||
-          !/[A-Z]/.test(plate) ||
-          !/[0-9]/.test(plate)
-        )
-      ) {
-        ut.blocked = true;
-        throw new Error('API trả dữ liệu không đúng cấu trúc CURRENT_UT_LIST.');
-      }
-
-      const plates = new Set(payload.plates);
-
-      if (
-        plates.size !== payload.count ||
-        plates.size !== payload.plates.length
-      ) {
-        throw new Error('Số lượng BKS UT không khớp.');
-      }
-
-      ut.snapshot = {
-        plates,
-        downloadedAt: Date.now()
-      };
-
-      ut.error = '';
-      saveConnection();
-
-      $('keyInput').value = '';
-      $('connectionMessage').textContent =
-        'Kết nối thành công. Danh sách tự tải lại mỗi 30 giây.';
-      $('connectionPanel').open = false;
-
-    } catch (error) {
-      ut.error = error.name === 'AbortError'
-        ? 'Kết nối quá 25 giây. Kiểm tra mạng và deployment.'
-        : error.message;
-
-      if (ut.error === 'Failed to fetch') {
-        ut.error =
-          'Trình duyệt không đọc được phản hồi API. ' +
-          'Kiểm tra mạng, quyền deployment và lượt chạy doPost trong Executions.';
-      }
-
-      $('connectionMessage').textContent = ut.error;
-      if (!sourceReady() || ut.blocked) $('connectionPanel').open = true;
-
     } finally {
-      clearTimeout(timeout);
       ut.loading = false;
-      $('connectButton').disabled = false;
-      sourceStatus();
-      refreshResult();
-      scheduleSource();
+      sourceStatus(); refreshResult(); scheduleSource();
     }
   }
-
-  $('connectionForm').addEventListener('submit', event => {
-    event.preventDefault();
-    if (ut.loading) return;
-
-    try {
-      const url = validateUrl($('apiInput').value);
-      const key = $('keyInput').value.trim() ||
-        (url === ut.url ? ut.key : '');
-
-      if (!key) throw new Error('Bạn chưa nhập khóa UT_ACCESS_KEY.');
-
-      if (url !== ut.url || key !== ut.key) {
-        ut.snapshot = null;
-        forgetSession();
-      }
-
-      ut.url = url;
-      ut.key = key;
-      ut.error = '';
-      ut.blocked = false;
-
-      try { localStorage.setItem(URL_STORAGE, url); } catch {}
-
-      refreshResult();
-      loadSource();
-    } catch (error) {
-      $('connectionMessage').textContent = error.message;
-    }
-  });
 
   $('manualForm').addEventListener('submit', event => {
     event.preventDefault();
 
+    if (!allowed()) return;
     const plate = normalize($('manualInput').value);
     manualUntil = performance.now() + CFG.manualHoldMs;
     cam.candidate = '';
@@ -879,7 +831,7 @@
   }
 
   async function startCamera() {
-    if (cam.starting || cam.running || document.hidden) return;
+    if (!allowed() || cam.starting || cam.running || document.hidden) return;
 
     const token = ++cam.generation;
     cam.starting = true;
@@ -941,13 +893,13 @@
   }
 
   function scheduleScan(token, delay) {
-    if (!cam.running || token !== cam.generation || document.hidden) return;
+    if (!allowed() || !cam.running || token !== cam.generation || document.hidden) return;
     clearTimeout(cam.timer);
     cam.timer = setTimeout(() => scan(token), delay);
   }
 
   async function scan(token) {
-    if (!cam.running || token !== cam.generation || document.hidden) return;
+    if (!allowed() || !cam.running || token !== cam.generation || document.hidden) return;
 
     if (cam.busy) {
       scheduleScan(token, 50);
@@ -1003,58 +955,55 @@
 
   function resume() {
     if (document.hidden) return;
-    startCamera();
-    if (ut.url && ut.key && !ut.blocked) loadSource();
+    if (auth.pending) void pollLogin();
+    if (auth.token) {
+      if (Date.now() >= auth.expiresAt) { closeSession('Phiên đã hết hạn. Vui lòng đăng nhập lại.'); return; }
+      void loadSource();
+      if (allowed()) void startCamera();
+    }
   }
-
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-      stopCamera();
-      clearTimeout(ut.timer);
-      selectedPlate = '';
-      selectedUntil = 0;
-      manualUntil = 0;
-      render('Đã tạm dừng', 'Quay lại trang để tiếp tục.');
+      stopCamera(); clearTimeout(ut.timer); clearTimeout(auth.pollTimer);
+      selectedPlate = ''; selectedUntil = 0; manualUntil = 0;
     } else {
+      // Revalidate before restarting the camera after returning from background.
+      auth.verifiedAt = 0;
+      $('scannerContent').hidden = true;
       resume();
     }
   });
-
   window.addEventListener('pagehide', () => {
-    stopCamera();
-    clearTimeout(ut.timer);
+    stopCamera(); clearTimeout(ut.timer); clearTimeout(auth.pollTimer);
+    auth.verifiedAt = 0;
   });
-
   window.addEventListener('pageshow', resume);
-
+  window.addEventListener('focus', () => { if (auth.pending) void pollLogin(); });
   setInterval(() => {
-    if (!document.hidden) {
-      sourceStatus();
-      refreshResult();
+    if (document.hidden) return;
+    if (auth.token && (Date.now() >= auth.expiresAt ||
+        (auth.verifiedAt > 0 && Date.now() - auth.verifiedAt >= 90000))) {
+      closeSession('Chưa xác minh lại được quyền truy cập. Kiểm tra mạng rồi đăng nhập lại.');
+      return;
     }
+    sourceStatus(); refreshResult();
   }, 1000);
-
+  // Remove obsolete shared-key storage. No secret or UT data is persisted.
   try {
-    const savedUrl = localStorage.getItem(URL_STORAGE) || UT_API_URL;
-    if (savedUrl) {
-      ut.url = validateUrl(savedUrl);
-      $('apiInput').value = ut.url;
+    sessionStorage.removeItem('truck_check_session_v05');
+    const saved = JSON.parse(sessionStorage.getItem(AUTH_STORAGE) || 'null');
+    if (saved && /^[A-Za-z0-9_-]{43}$/.test(saved.token || '') && saved.expiresAt > Date.now()) {
+      auth.token = saved.token; auth.expiresAt = saved.expiresAt;
+      $('loginMessage').textContent = 'Đang kiểm tra phiên đăng nhập…';
+    } else {
+      const p = JSON.parse(sessionStorage.getItem(PENDING_STORAGE) || 'null');
+      if (p && /^[a-f0-9]{64}$/.test(p.verifier || '') && /^[a-f0-9]{64}$/.test(p.challenge || '') && p.expiresAt > Date.now()) {
+        auth.pending = p; showPending();
+      }
     }
-  } catch {}
-
-  try {
-    const saved = JSON.parse(
-      sessionStorage.getItem(SESSION_STORAGE) || 'null'
-    );
-
-    if (saved && saved.url === ut.url && typeof saved.key === 'string') {
-      ut.key = saved.key;
-    }
-  } catch {
-    forgetSession();
-  }
-
+  } catch (_) {}
   resume();
+
 })();
 </script>
 </body>
