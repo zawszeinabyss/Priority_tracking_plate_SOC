@@ -5,7 +5,7 @@
 <meta name="viewport"
       content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080d1d">
-<title>Truck Check V06 · Mobile</title>
+<title>Truck Check V07.2</title>
 
 <style>
   * { box-sizing: border-box; }
@@ -218,7 +218,7 @@ label[for="manualInput"]{margin:0 0 8px;font-size:13px}
       <div class="brand">BD MEGA · TRUCK CHECK</div>
       <h1>Quét BKS</h1>
     </div>
-    <span class="badge">V06</span>
+    <span class="badge">V07.2</span>
   </header>
 
   <section id="loginGate" class="card">
@@ -270,7 +270,8 @@ label[for="manualInput"]{margin:0 0 8px;font-size:13px}
     <p id="adminStatus" class="note"></p>
   </details>
   </div>
-  <footer>Truck Check V06 · Chưa ghi log lượt quét</footer>
+  <p id="logStatus" role="status" class="note" style="text-align:center"></p>
+<footer>Truck Check V07.2 · Lưu lịch sử kiểm tra</footer>
 
   <canvas id="modelCanvas" width="128" height="64" hidden></canvas>
 </main>
@@ -378,6 +379,45 @@ label[for="manualInput"]{margin:0 0 8px;font-size:13px}
     }
   }
 
+  const logQueue = [];
+  const lastLogged = new Map();
+  let logSending = false;
+  let logRetryTimer;
+  function queueLog(plate, method) {
+    if (!sourceReady()) return;
+    const now=Date.now(), previous=lastLogged.get(plate);
+    // Same plate held in view stays one event. A 10s absence permits another.
+    if(previous && now-previous<10000) { lastLogged.set(plate,now); return; }
+    if(logQueue.length>=50) { $('logStatus').textContent='Hàng đợi log đầy. Lượt này chưa được lưu.'; return; }
+    for(const [p,t] of lastLogged) if(now-t>60000) lastLogged.delete(p);
+    lastLogged.set(plate,now);
+    logQueue.push({eventId:randomHex(),plate,method,capturedAt:now,priorityClient:ut.snapshot.plates.has(plate),token:auth.token});
+    void sendLogs();
+  }
+  async function sendLogs() {
+    if(logSending || !logQueue.length || document.hidden || !allowed()) return;
+    clearTimeout(logRetryTimer);
+    logSending=true;
+    const item=logQueue[0], epoch=auth.epoch;
+    $('logStatus').textContent='Đang lưu lượt kiểm tra…';
+    try {
+      await apiCall({action:'log',sessionToken:item.token,eventId:item.eventId,plate:item.plate,method:item.method,capturedAt:item.capturedAt,priorityClient:item.priorityClient});
+      if(epoch!==auth.epoch) return;
+      logQueue.shift();
+      $('logStatus').textContent=logQueue.length ? 'Còn '+logQueue.length+' lượt chờ lưu.' : 'Đã lưu lượt kiểm tra.';
+    } catch(err) {
+      if(epoch!==auth.epoch) return;
+      if(['FORBIDDEN','UNAUTHORIZED'].includes(err.code)) {closeSession(err.message);return;}
+      $('logStatus').textContent='Chưa lưu được '+logQueue.length+' lượt. '+err.message+' Giữ trang mở để thử lại.';
+    } finally {
+      logSending=false;
+      if(logQueue.length && allowed()) logRetryTimer=setTimeout(sendLogs,5000);
+    }
+  }
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden) void sendLogs();});
+  window.addEventListener('online',()=>void sendLogs());
+  window.addEventListener('beforeunload',event=>{if(logQueue.length){event.preventDefault();event.returnValue='';}});
+
   function allowed() {
     return !!auth.token && !!auth.user && Date.now() < auth.expiresAt &&
       Date.now() - auth.verifiedAt < 90000;
@@ -410,6 +450,10 @@ label[for="manualInput"]{margin:0 0 8px;font-size:13px}
 
   function closeSession(message = 'Vui lòng đăng nhập để tiếp tục.') {
     auth.epoch++;
+    const lostLogs = logQueue.length;
+    logQueue.length=0; lastLogged.clear(); clearTimeout(logRetryTimer);
+    $('logStatus').textContent=lostLogs ? lostLogs+' lượt chưa lưu trước khi phiên kết thúc.' : '';
+    if(lostLogs) message += '\nCó '+lostLogs+' lượt chưa lưu. Cần kiểm tra lại.';
     auth.token = ''; auth.user = null; auth.expiresAt = 0; auth.verifiedAt = 0;
     ut.snapshot = null; ut.error = '';
     clearTimeout(ut.timer); clearPending(); stopCamera();
@@ -562,9 +606,10 @@ label[for="manualInput"]{margin:0 0 8px;font-size:13px}
       $('loginGate').hidden = true;
       $('scannerContent').hidden = false;
       $('accountBar').hidden = false;
-      $('accountEmail').textContent = auth.user.email;
+      $('accountEmail').textContent = auth.user.displayName || 'Nhân viên quét';
       $('adminPanel').hidden = auth.user.role !== 'ADMIN';
       saveSession();
+      void sendLogs();
       void startCamera();
     } catch (err) {
       if (epoch !== auth.epoch) return;
@@ -597,6 +642,7 @@ label[for="manualInput"]{margin:0 0 8px;font-size:13px}
     selectedPlate = plate;
     selectedUntil = manualUntil;
     lookup(plate);
+    queueLog(plate, 'MANUAL');
 
     $('manualInput').value = plate;
     $('manualInput').blur();
@@ -802,6 +848,7 @@ label[for="manualInput"]{margin:0 0 8px;font-size:13px}
         selectedPlate = result.plate;
         selectedUntil = now + CFG.ocrHoldMs;
         lookup(selectedPlate);
+        queueLog(selectedPlate, 'OCR');
         return;
       }
     } else {
